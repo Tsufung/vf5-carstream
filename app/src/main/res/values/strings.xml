@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VF5 CarStream</string>
+    <string name="app_desc">Trình xem web cho VinFast VF5 Plus 2025 qua Android Auto</string>
+    <string name="settings_title">Cài đặt VF5 CarStream</string>
+    <string name="bookmarks_title">Bookmarks</string>
+    <string name="add_bookmark">Thêm Bookmark</string>
+    <string name="delete_bookmark">Xóa</string>
+    <string name="clear_cache">Xóa Cache &amp; Cookies</string>
+    <string name="auto_resume">Tự động mở lại video dở</string>
+    <string name="keep_screen_on">Giữ màn hình sáng</string>
+    <string name="adb_command">adb install -i \"com.android.vending\" app-debug.apk</string>
+</resources>
