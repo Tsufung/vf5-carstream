@@ -1,10 +1,9 @@
 package com.vf5plus.carstream
 
-import android.content.ComponentName
 import android.content.Intent
-import android.content.SharedPreferences
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.os.Bundle
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
@@ -16,76 +15,170 @@ import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
+import androidx.car.app.model.CarIcon
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
+import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 
+private const val TAG = "CarStreamScreen"
+
 class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallback {
 
-    companion object {
-        private const val TAG = "CarStreamScreen"
-        const val PREFS_NAME = "vf5_carstream_prefs"
-        const val KEY_LAST_URL = "last_url"
-        const val KEY_AUTO_RESUME = "auto_resume"
-        const val KEY_ACTIVE_PANEL = "active_panel"
-        private const val VIRTUAL_DISPLAY_NAME = "VF5SplitDisplay"
-    }
-
     private var virtualDisplay: VirtualDisplay? = null
-    private var splitPresentation: SplitScreenPresentation? = null
+    private var presentation: SplitScreenPresentation? = null
     private var mediaSession: MediaSessionCompat? = null
-    private var surfaceContainer: SurfaceContainer? = null
 
-    private val prefs: SharedPreferences by lazy {
-        carContext.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
-    }
-
-    // ── 1. Register SurfaceCallback & setup MediaSession ──────────────────────
     init {
+        // Đăng ký SurfaceCallback — PHẢI gọi trước onGetTemplate()
         try {
             carContext.getCarService(AppManager::class.java)
                 .setSurfaceCallback(this)
         } catch (e: Exception) {
             Log.e(TAG, "setSurfaceCallback failed: ${e.message}")
         }
+
+        // Khởi tạo MediaSessionCompat để bắt các nút bấm điều khiển trên vô lăng (Next/Prev/Play/Pause)
         setupMediaSession()
 
+        // Dọn dẹp khi Screen bị hủy
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onDestroy(owner: LifecycleOwner) {
-                mediaSession?.release()
-                mediaSession = null
+                releaseDisplay()
+                releaseMediaSession()
             }
         })
     }
 
-    // ── 2. Build NavigationTemplate (required for Surface to be granted) ──────
+    private fun setupMediaSession() {
+        try {
+            mediaSession = MediaSessionCompat(carContext, "VF5CarStreamSession").apply {
+                setFlags(
+                    MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
+                    MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
+                )
+
+                val stateBuilder = PlaybackStateCompat.Builder()
+                    .setActions(
+                        PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+                    )
+                    .setState(PlaybackStateCompat.STATE_PLAYING, 0L, 1.0f)
+
+                setPlaybackState(stateBuilder.build())
+
+                setCallback(object : MediaSessionCompat.Callback() {
+                    override fun onSkipToNext() {
+                        Log.d(TAG, "MediaSession: onSkipToNext (Vô lăng chuyển bài tiếp)")
+                        carContext.mainExecutor.execute {
+                            presentation?.mediaNext()
+                        }
+                    }
+
+                    override fun onSkipToPrevious() {
+                        Log.d(TAG, "MediaSession: onSkipToPrevious (Vô lăng lùi bài)")
+                        carContext.mainExecutor.execute {
+                            presentation?.mediaPrev()
+                        }
+                    }
+
+                    override fun onPlay() {
+                        Log.d(TAG, "MediaSession: onPlay")
+                        carContext.mainExecutor.execute {
+                            presentation?.mediaPlayPause()
+                        }
+                    }
+
+                    override fun onPause() {
+                        Log.d(TAG, "MediaSession: onPause")
+                        carContext.mainExecutor.execute {
+                            presentation?.mediaPlayPause()
+                        }
+                    }
+
+                    override fun onMediaButtonEvent(mediaButtonIntent: Intent?): Boolean {
+                        val keyEvent = mediaButtonIntent?.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+                        if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
+                            when (keyEvent.keyCode) {
+                                KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                                    carContext.mainExecutor.execute { presentation?.mediaNext() }
+                                    return true
+                                }
+                                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                                    carContext.mainExecutor.execute { presentation?.mediaPrev() }
+                                    return true
+                                }
+                                KeyEvent.KEYCODE_MEDIA_PLAY,
+                                KeyEvent.KEYCODE_MEDIA_PAUSE,
+                                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                                KeyEvent.KEYCODE_HEADSETHOOK -> {
+                                    carContext.mainExecutor.execute { presentation?.mediaPlayPause() }
+                                    return true
+                                }
+                            }
+                        }
+                        return super.onMediaButtonEvent(mediaButtonIntent)
+                    }
+                })
+
+                isActive = true
+            }
+            Log.d(TAG, "MediaSessionCompat initialized and active")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting up MediaSessionCompat: ${e.message}", e)
+        }
+    }
+
+    private fun releaseMediaSession() {
+        try {
+            mediaSession?.let {
+                it.isActive = false
+                it.release()
+            }
+            mediaSession = null
+        } catch (e: Exception) {
+            Log.w(TAG, "mediaSession release error: ${e.message}")
+        }
+    }
+
+    // ─── Template ─────────────────────────────────────────────────────────────
+
     override fun onGetTemplate(): Template {
-        val mapAction = Action.Builder()
-            .setTitle("🗺 Bản đồ")
-            .setOnClickListener { splitPresentation?.focusPanel(SplitScreenPresentation.Panel.MAP) }
-            .build()
-
-        val ytAction = Action.Builder()
-            .setTitle("▶ YouTube")
-            .setOnClickListener { splitPresentation?.focusPanel(SplitScreenPresentation.Panel.YOUTUBE) }
-            .build()
-
-        val tiktokAction = Action.Builder()
-            .setTitle("TikTok")
-            .setOnClickListener { splitPresentation?.focusPanel(SplitScreenPresentation.Panel.TIKTOK) }
-            .build()
-
-        val reloadAction = Action.Builder()
-            .setTitle("↺ Tải lại")
-            .setOnClickListener { splitPresentation?.reloadActive() }
-            .build()
-
         val actionStrip = ActionStrip.Builder()
-            .addAction(mapAction)
-            .addAction(ytAction)
-            .addAction(tiktokAction)
-            .addAction(reloadAction)
+            .addAction(
+                Action.Builder()
+                    .setTitle("🏠 Trang chủ")
+                    .setOnClickListener { onHomeClicked() }
+                    .build()
+            )
+            .addAction(
+                Action.Builder()
+                    .setTitle("🗺️ Bản đồ")
+                    .setOnClickListener { onMapClicked() }
+                    .build()
+            )
+            .addAction(
+                Action.Builder()
+                    .setTitle("⏮ Trước")
+                    .setOnClickListener { onPrevClicked() }
+                    .build()
+            )
+            .addAction(
+                Action.Builder()
+                    .setTitle("⏭ Tiếp")
+                    .setOnClickListener { onNextClicked() }
+                    .build()
+            )
+            .addAction(
+                Action.Builder()
+                    .setTitle("🔄 Tải lại")
+                    .setOnClickListener { onReloadClicked() }
+                    .build()
+            )
             .build()
 
         return NavigationTemplate.Builder()
@@ -93,142 +186,133 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
             .build()
     }
 
-    // ── 3. Surface ready → create VirtualDisplay → show SplitScreenPresentation ─
-    override fun onSurfaceAvailable(container: SurfaceContainer) {
-        Log.d(TAG, "Surface available ${container.width}x${container.height} dpi=${container.dpi}")
-        this.surfaceContainer = container
+    // ─── SurfaceCallback ──────────────────────────────────────────────────────
+
+    override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
+        Log.d(TAG, "onSurfaceAvailable: ${surfaceContainer.width}x${surfaceContainer.height} dpi=${surfaceContainer.dpi}")
+
+        val surface = surfaceContainer.surface ?: run {
+            Log.e(TAG, "Surface is null!")
+            return
+        }
+        val width = surfaceContainer.width.takeIf { it > 0 } ?: 1280
+        val height = surfaceContainer.height.takeIf { it > 0 } ?: 720
+        val dpi = surfaceContainer.dpi.takeIf { it > 0 } ?: 213
+
+        // Giải phóng VirtualDisplay cũ nếu có
+        releaseDisplay()
+
+        // Tạo VirtualDisplay gắn với Surface của màn hình xe
+        val displayManager = carContext.applicationContext
+            .getSystemService(android.content.Context.DISPLAY_SERVICE) as DisplayManager
 
         try {
-            val dm = carContext.getSystemService(android.content.Context.DISPLAY_SERVICE)
-                    as DisplayManager
+            val flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or
+                        DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
 
-            virtualDisplay = dm.createVirtualDisplay(
-                VIRTUAL_DISPLAY_NAME,
-                container.width.coerceAtLeast(1),
-                container.height.coerceAtLeast(1),
-                container.dpi.coerceAtLeast(160),
-                container.surface,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY or
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
+            virtualDisplay = displayManager.createVirtualDisplay(
+                "VF5CarStream",
+                width, height, dpi,
+                surface,
+                flags
             )
 
-            virtualDisplay?.display?.let { display ->
-                val autoResume = prefs.getBoolean(KEY_AUTO_RESUME, true)
-                val lastUrl = if (autoResume) prefs.getString(KEY_LAST_URL, null) else null
-                splitPresentation = SplitScreenPresentation(
-                    context = carContext,
-                    display = display,
-                    lastMediaUrl = lastUrl,
-                    onNavigationRequested = { geoUri ->
-                        openGoogleMapsNavigation(geoUri)
-                    }
-                )
-                splitPresentation?.show()
-                Log.d(TAG, "SplitScreenPresentation shown")
+            val display = virtualDisplay?.display ?: run {
+                Log.e(TAG, "VirtualDisplay.display is null!")
+                return
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "onSurfaceAvailable error: ${e.message}", e)
-        }
-    }
 
-    // ── 4. Surface destroyed → save state & clean up ─────────────────────────
-    override fun onSurfaceDestroyed(container: SurfaceContainer) {
-        Log.d(TAG, "Surface destroyed")
-        try {
-            splitPresentation?.getActiveMediaUrl()?.let { url ->
-                if (url.startsWith("http")) {
-                    prefs.edit().putString(KEY_LAST_URL, url).apply()
+            // Tạo Presentation trên main thread (UI thread)
+            carContext.mainExecutor.execute {
+                try {
+                    val p = SplitScreenPresentation(
+                        outerContext = carContext.applicationContext,
+                        display = display
+                    )
+                    p.show()
+                    presentation = p
+                    Log.d(TAG, "Presentation shown successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Presentation.show() failed: ${e.message}", e)
                 }
             }
-            splitPresentation?.dismiss()
-            splitPresentation = null
-            virtualDisplay?.release()
-            virtualDisplay = null
-            surfaceContainer = null
         } catch (e: Exception) {
-            Log.e(TAG, "onSurfaceDestroyed error: ${e.message}", e)
+            Log.e(TAG, "createVirtualDisplay failed: ${e.message}", e)
         }
     }
 
-    override fun onVisibleAreaChanged(visibleArea: android.graphics.Rect) {}
-    override fun onStableAreaChanged(stableArea: android.graphics.Rect) {}
-
-    // ── 5. MediaSession for steering wheel button (KEYCODE_MEDIA_NEXT / PREV) ─
-    private fun setupMediaSession() {
-        try {
-            mediaSession = MediaSessionCompat(carContext, "VF5CarStream").apply {
-                setFlags(
-                    MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
-                    MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
-                )
-                setPlaybackState(
-                    PlaybackStateCompat.Builder()
-                        .setActions(
-                            PlaybackStateCompat.ACTION_PLAY or
-                            PlaybackStateCompat.ACTION_PAUSE or
-                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-                        )
-                        .setState(PlaybackStateCompat.STATE_PLAYING, 0L, 1f)
-                        .build()
-                )
-                setCallback(object : MediaSessionCompat.Callback() {
-                    override fun onSkipToNext() {
-                        Log.d(TAG, "Steering wheel: NEXT")
-                        splitPresentation?.mediaNext()
-                    }
-                    override fun onSkipToPrevious() {
-                        Log.d(TAG, "Steering wheel: PREV")
-                        splitPresentation?.mediaPrev()
-                    }
-                    override fun onPlay() {
-                        splitPresentation?.mediaPlayPause()
-                    }
-                    override fun onPause() {
-                        splitPresentation?.mediaPlayPause()
-                    }
-                    override fun onMediaButtonEvent(mediaButtonEvent: Intent): Boolean {
-                        val keyEvent = mediaButtonEvent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
-                        if (keyEvent?.action == KeyEvent.ACTION_DOWN) {
-                            when (keyEvent.keyCode) {
-                                KeyEvent.KEYCODE_MEDIA_NEXT -> { splitPresentation?.mediaNext(); return true }
-                                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { splitPresentation?.mediaPrev(); return true }
-                                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { splitPresentation?.mediaPlayPause(); return true }
-                            }
-                        }
-                        return super.onMediaButtonEvent(mediaButtonEvent)
-                    }
-                })
-                isActive = true
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "MediaSession setup error: ${e.message}", e)
-        }
+    override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) {
+        Log.d(TAG, "onSurfaceDestroyed")
+        releaseDisplay()
     }
 
-    // ── 6. Open Google Maps native app for navigation ─────────────────────────
-    private fun openGoogleMapsNavigation(geoUri: String) {
-        try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                data = android.net.Uri.parse(geoUri)
-                `package` = "com.google.android.apps.maps"
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            carContext.startActivity(intent)
-        } catch (e: Exception) {
-            // Fallback: open in browser
-            try {
-                val browserIntent = Intent(Intent.ACTION_VIEW,
-                    android.net.Uri.parse("https://maps.google.com/?q=${geoUri.removePrefix("geo:")}"))
-                browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                carContext.startActivity(browserIntent)
-            } catch (ex: Exception) {
-                Log.e(TAG, "Cannot open Maps: ${ex.message}")
-            }
-        }
+    override fun onVisibleAreaChanged(visibleArea: android.graphics.Rect) {
+        Log.d(TAG, "onVisibleAreaChanged: $visibleArea")
     }
+
+    override fun onStableAreaChanged(stableArea: android.graphics.Rect) {
+        Log.d(TAG, "onStableAreaChanged: $stableArea")
+    }
+
+    // ─── External Controls ───────────────────────────────────────────────────
 
     fun loadUrl(url: String) {
-        splitPresentation?.loadMediaUrl(url)
+        carContext.mainExecutor.execute {
+            presentation?.loadMediaUrl(url)
+        }
+    }
+
+    // ─── Action handlers ──────────────────────────────────────────────────────
+
+    private fun onHomeClicked() {
+        carContext.mainExecutor.execute {
+            presentation?.mapWebView?.loadUrl("https://www.google.com/maps/@?api=1&map_action=map")
+            presentation?.mediaWebView?.loadUrl("https://m.youtube.com")
+        }
+    }
+
+    private fun onMapClicked() {
+        carContext.mainExecutor.execute {
+            presentation?.mapWebView?.loadUrl("https://www.google.com/maps/@?api=1&map_action=map")
+        }
+    }
+
+    private fun onNextClicked() {
+        carContext.mainExecutor.execute {
+            presentation?.mediaNext()
+        }
+    }
+
+    private fun onPrevClicked() {
+        carContext.mainExecutor.execute {
+            presentation?.mediaPrev()
+        }
+    }
+
+    private fun onReloadClicked() {
+        carContext.mainExecutor.execute {
+            presentation?.mapWebView?.reload()
+            presentation?.mediaWebView?.reload()
+        }
+    }
+
+    // ─── Cleanup ──────────────────────────────────────────────────────────────
+
+    private fun releaseDisplay() {
+        try {
+            carContext.mainExecutor.execute {
+                presentation?.dismiss()
+                presentation = null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "presentation dismiss error: ${e.message}")
+        }
+        try {
+            virtualDisplay?.release()
+            virtualDisplay = null
+        } catch (e: Exception) {
+            Log.w(TAG, "virtualDisplay release error: ${e.message}")
+        }
+        Log.d(TAG, "releaseDisplay done")
     }
 }
