@@ -139,6 +139,12 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
 
     // ─── Touch Events ─────────────────────────────────────────────────────────
 
+    fun loadUrl(url: String) {
+        Handler(Looper.getMainLooper()).post {
+            presentation?.mediaWebView?.loadUrl(url)
+        }
+    }
+
     override fun onClick(x: Float, y: Float) {
         Handler(Looper.getMainLooper()).post {
             presentation?.dispatchClick(x, y)
