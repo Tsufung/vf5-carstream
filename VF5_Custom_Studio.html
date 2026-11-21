@@ -172,37 +172,98 @@
               </button>
             </div>
 
-            <!-- YouTube Video player -->
-            <div id="viewYouTube" class="flex-1 p-2 flex flex-col justify-between bg-black">
-              <div class="relative w-full aspect-video rounded-xl bg-slate-900 overflow-hidden border border-gray-800 shadow-md">
-                <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/30 flex items-end p-2.5">
-                  <span id="playingTitle" class="text-xs font-semibold text-white truncate max-w-full">
-                    🎵 Tuyển Tập Nhạc Lái Xe Buổi Tối Cho Bác Tài 2026
+            <!-- YouTube Video player & Realistic Feed -->
+            <div id="viewYouTube" class="flex-1 flex flex-col bg-[#0f0f0f] overflow-hidden text-white">
+              <!-- Video Player Header (16:9 aspect) -->
+              <div class="relative w-full aspect-video bg-black flex-shrink-0 border-b border-[#222]">
+                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 flex items-end p-2">
+                  <span id="playingTitle" class="text-[11px] font-semibold text-white truncate max-w-full">
+                    🎵 Tuyển Tập Nhạc Lái Xe Buổi Tối Cho Bác Tài VF5
                   </span>
                 </div>
-                <div class="absolute top-1.5 right-1.5 bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow">
+                <div class="absolute top-1.5 right-1.5 bg-emerald-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow">
                   CHẶN QC
                 </div>
+                <!-- Play button -->
                 <div class="absolute inset-0 flex items-center justify-center">
-                  <div class="w-11 h-11 rounded-full bg-red-600 flex items-center justify-center text-white text-xl shadow-xl hover:scale-110 transition cursor-pointer">
+                  <div class="w-10 h-10 rounded-full bg-red-600/90 hover:bg-red-600 flex items-center justify-center text-white text-lg shadow-xl cursor-pointer">
                     ▶
+                  </div>
+                </div>
+                <!-- Seekbar at bottom of video -->
+                <div class="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
+                  <div class="bg-red-600 h-full w-[45%]"></div>
+                </div>
+              </div>
+
+              <!-- Channel Info & Actions Bar -->
+              <div class="p-2 border-b border-[#222] bg-[#121212] flex-shrink-0 flex items-center justify-between">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <div class="w-6 h-6 rounded-full bg-[#C86A3E] flex items-center justify-center font-bold text-[10px] text-white">
+                    VF
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-[10px] font-bold truncate">VinFast Car Radio</div>
+                    <div class="text-[8px] text-gray-400">1.2M đăng ký</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button class="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-[9px] font-medium flex items-center gap-1">
+                    👍 24K
+                  </button>
+                  <button class="px-2 py-0.5 rounded-full bg-red-600 text-[9px] font-bold">
+                    Đăng ký
+                  </button>
+                </div>
+              </div>
+
+              <!-- Scrollable Feed / Up Next Videos (Lấp đầy khoảng trống) -->
+              <div class="flex-1 overflow-y-auto p-2 space-y-2 bg-[#0f0f0f] text-[10px]">
+                <div class="text-[9px] font-bold text-gray-400 uppercase tracking-wider flex justify-between items-center">
+                  <span>Video tiếp theo</span>
+                  <span class="text-emerald-400 font-mono">Tự động phát</span>
+                </div>
+
+                <!-- Video Item 1 -->
+                <div class="flex gap-2 p-1 rounded-lg hover:bg-white/5 cursor-pointer transition">
+                  <div class="w-20 h-12 rounded bg-slate-800 flex-shrink-0 relative overflow-hidden flex items-center justify-center font-bold text-gray-500 text-xs">
+                    <span class="text-sm">📻</span>
+                    <span class="absolute bottom-0.5 right-0.5 bg-black/80 text-[7px] px-1 rounded text-white">45:10</span>
+                  </div>
+                  <div class="min-w-0 flex flex-col justify-center">
+                    <div class="font-semibold text-gray-100 line-clamp-2 leading-tight">Nhạc Trữ Tình Bolero Lái Xe Đêm Không Buồn Ngủ</div>
+                    <div class="text-[8px] text-gray-400 mt-0.5">Bolero Quê Hương • 4.5M lượt xem</div>
+                  </div>
+                </div>
+
+                <!-- Video Item 2 -->
+                <div class="flex gap-2 p-1 rounded-lg hover:bg-white/5 cursor-pointer transition">
+                  <div class="w-20 h-12 rounded bg-slate-800 flex-shrink-0 relative overflow-hidden flex items-center justify-center font-bold text-gray-500 text-xs">
+                    <span class="text-sm">⚡</span>
+                    <span class="absolute bottom-0.5 right-0.5 bg-black/80 text-[7px] px-1 rounded text-white">15:20</span>
+                  </div>
+                  <div class="min-w-0 flex flex-col justify-center">
+                    <div class="font-semibold text-gray-100 line-clamp-2 leading-tight">Đánh giá VinFast VF5 Plus sau 1 năm chạy dịch vụ XanhSM</div>
+                    <div class="text-[8px] text-gray-400 mt-0.5">Xe Hay Channel • 820K lượt xem</div>
+                  </div>
+                </div>
+
+                <!-- Video Item 3 -->
+                <div class="flex gap-2 p-1 rounded-lg hover:bg-white/5 cursor-pointer transition">
+                  <div class="w-20 h-12 rounded bg-slate-800 flex-shrink-0 relative overflow-hidden flex items-center justify-center font-bold text-gray-500 text-xs">
+                    <span class="text-sm">🎧</span>
+                    <span class="absolute bottom-0.5 right-0.5 bg-black/80 text-[7px] px-1 rounded text-white">1:02:15</span>
+                  </div>
+                  <div class="min-w-0 flex flex-col justify-center">
+                    <div class="font-semibold text-gray-100 line-clamp-2 leading-tight">Tuyển tập Remix Bass Căng Nhất 2026 Quẩy Tỉnh Táo</div>
+                    <div class="text-[8px] text-gray-400 mt-0.5">Nonstop Club • 1.9M lượt xem</div>
                   </div>
                 </div>
               </div>
 
-              <!-- Media bar -->
-              <div class="space-y-1.5 my-auto">
-                <div class="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
-                  <div class="bg-[#C86A3E] h-full w-1/2"></div>
-                </div>
-                <div class="flex justify-between text-[10px] text-gray-400 font-mono">
-                  <span>03:12</span>
-                  <span>06:45</span>
-                </div>
-              </div>
-
-              <div class="text-[10px] text-gray-400 text-center bg-gray-900/80 py-1.5 rounded-lg border border-gray-800">
-                👤 Đăng nhập: <span class="text-white font-medium">Tài khoản Google cá nhân</span>
+              <!-- Login hint at bottom -->
+              <div class="p-1.5 bg-[#121212] border-t border-[#222] text-[9px] text-center text-gray-400 flex items-center justify-center gap-1">
+                <span>👤</span> Đã kết nối: <span class="text-white font-medium">Tài khoản Google cá nhân</span>
               </div>
             </div>
 
@@ -341,12 +402,28 @@
       <div class="bg-[#15171E] rounded-3xl p-4 border border-[#262A37] space-y-4 text-xs">
         
         <!-- Tỉ lệ màn hình -->
-        <div class="space-y-1.5 pb-3 border-b border-[#252835]">
+        <div class="space-y-2 pb-3 border-b border-[#252835]">
           <div class="font-bold text-white flex justify-between">
             <span>Tỉ lệ chia màn hình:</span>
             <span id="statSplit" class="text-cyan-400 font-mono">67% : 33%</span>
           </div>
-          <div class="text-[11px] text-gray-400">Tự do kéo thanh chia đôi ở giữa để điều chỉnh kích thước bản đồ theo ý muốn.</div>
+          <div class="text-[11px] text-gray-400">Tự do kéo thanh chia đôi ở giữa hoặc bấm chọn nhanh:</div>
+          
+          <div class="grid grid-cols-3 gap-1.5 pt-1">
+            <button onclick="applySplitRatio(67)" class="py-1 px-1.5 rounded-lg bg-[#C86A3E] text-white font-bold text-[10px] text-center shadow">
+              ⭐ 2/3 : 1/3 (67:33)
+            </button>
+            <button onclick="applySplitRatio(50)" class="py-1 px-1.5 rounded-lg bg-[#222530] hover:bg-[#2c3140] text-gray-300 text-[10px] text-center font-medium">
+              50% : 50%
+            </button>
+            <button onclick="applySplitRatio(75)" class="py-1 px-1.5 rounded-lg bg-[#222530] hover:bg-[#2c3140] text-gray-300 text-[10px] text-center font-medium">
+              3/4 : 1/4 (75:25)
+            </button>
+          </div>
+
+          <div id="splitRatioHint" class="text-[10px] text-emerald-400 mt-1">
+            ✅ Tỉ lệ lý tưởng: Khung video 16:9 to rõ, danh sách phát bên dưới cuộn mượt mà.
+          </div>
         </div>
 
         <!-- Tọa độ HUD Tốc độ -->
@@ -439,6 +516,27 @@
       e.preventDefault();
     });
 
+    function applySplitRatio(mapPct) {
+      const mapInt = Math.round(mapPct);
+      const mediaInt = 100 - mapInt;
+      paneMap.style.width = mapInt + '%';
+      paneMedia.style.width = mediaInt + '%';
+
+      document.getElementById('lblMapPct').textContent = mapInt + '%';
+      document.getElementById('lblMediaPct').textContent = mediaInt + '%';
+      document.getElementById('statSplit').textContent = `${mapInt}% : ${mediaInt}%`;
+
+      const hint = document.getElementById('splitRatioHint');
+      if (mediaInt < 25) {
+        hint.textContent = `⚠️ Cột YouTube hơi hẹp (${mediaInt}%), video 16:9 sẽ bị bé. Khuyên dùng tỉ lệ 67% : 33%!`;
+        hint.className = 'text-[10px] text-amber-400 mt-1';
+      } else {
+        hint.textContent = '✅ Tỉ lệ lý tưởng: Khung video 16:9 to rõ, danh sách phát bên dưới cuộn mượt mà.';
+        hint.className = 'text-[10px] text-emerald-400 mt-1';
+      }
+      log(`Đã đổi tỉ lệ màn hình: ${mapInt}% Bản đồ - ${mediaInt}% Giải trí`);
+    }
+
     window.addEventListener('mousemove', (e) => {
       if (!isDraggingDivider) return;
       const rect = viewport.getBoundingClientRect();
@@ -446,15 +544,7 @@
       let pct = (posX / rect.width) * 100;
       pct = Math.max(20, Math.min(85, pct)); // Giới hạn 20% đến 85%
 
-      paneMap.style.width = pct + '%';
-      paneMedia.style.width = (100 - pct) + '%';
-
-      const mapInt = Math.round(pct);
-      const mediaInt = 100 - mapInt;
-      document.getElementById('lblMapPct').textContent = mapInt + '%';
-      document.getElementById('lblMediaPct').textContent = mediaInt + '%';
-      document.getElementById('statSplit').textContent = `${mapInt}% : ${mediaInt}%`;
-      log(`Đã kéo tỉ lệ màn hình: ${mapInt}% Bản đồ - ${mediaInt}% Giải trí`);
+      applySplitRatio(pct);
     });
 
     window.addEventListener('mouseup', () => {
