@@ -7,6 +7,7 @@ import androidx.car.app.validation.HostValidator
 class VF5CarStreamService : CarAppService() {
 
     override fun createHostValidator(): HostValidator {
+        // Allow all hosts — required for sideloaded / personal builds (not Play Store)
         return HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
     }
 
