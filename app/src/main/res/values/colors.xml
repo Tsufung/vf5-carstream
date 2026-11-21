@@ -1,14 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#1a1a2e</color>
-    <color name="colorPrimaryDark">#0a0a1a</color>
-    <color name="colorAccent">#00bfff</color>
-    <color name="colorBackground">#0a0a0a</color>
-    <color name="colorSurface">#1a1a2e</color>
-    <color name="colorOnPrimary">#ffffff</color>
-    <color name="colorOnSurface">#ffffff</color>
-    <color name="colorCarStreamBlue">#00bfff</color>
-    <color name="colorCarStreamGreen">#00ff7f</color>
-    <color name="colorCarStreamRed">#c0392b</color>
-    <color name="colorCarStreamYellow">#f39c12</color>
+    <color name="colorPrimary">#2D251F</color>
+    <color name="colorPrimaryDark">#1D1713</color>
+    <color name="colorAccent">#C86A3E</color>
+    <color name="colorAccentWarm">#C86A3E</color>
+    <color name="colorAccentWarmDark">#A8552E</color>
+    <color name="colorBackground">#F6F3EE</color>
+    <color name="colorSurface">#FFFFFF</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+    <color name="colorOnSurface">#2D251F</color>
+    <color name="textPrimary">#2D251F</color>
+    <color name="textSecondary">#7C746D</color>
+    <color name="pillInactive">#EDE7DF</color>
+    <color name="pillInactiveText">#4E453E</color>
+    <color name="badgeGreenBg">#E3F5E7</color>
+    <color name="badgeGreenText">#1C6C38</color>
+    <color name="badgeGrayBg">#EDEBE7</color>
+    <color name="badgeGrayText">#6E6760</color>
+    <color name="cardStroke">#E5DFD7</color>
 </resources>

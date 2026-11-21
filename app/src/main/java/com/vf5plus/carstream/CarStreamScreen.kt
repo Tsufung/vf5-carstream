@@ -1,8 +1,14 @@
 package com.vf5plus.carstream
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Bundle
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -15,23 +21,24 @@ import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
-import androidx.car.app.model.CarIcon
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
-import androidx.core.graphics.drawable.IconCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 
 private const val TAG = "CarStreamScreen"
 
-class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallback {
+class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallback, LocationListener {
 
     private var virtualDisplay: VirtualDisplay? = null
     private var presentation: SplitScreenPresentation? = null
     private var mediaSession: MediaSessionCompat? = null
+    private var locationManager: LocationManager? = null
+    private val config: VF5Config by lazy { VF5Config(carContext.applicationContext) }
 
     init {
-        // Đăng ký SurfaceCallback — PHẢI gọi trước onGetTemplate()
+        // Đăng ký SurfaceCallback
         try {
             carContext.getCarService(AppManager::class.java)
                 .setSurfaceCallback(this)
@@ -39,17 +46,75 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
             Log.e(TAG, "setSurfaceCallback failed: ${e.message}")
         }
 
-        // Khởi tạo MediaSessionCompat để bắt các nút bấm điều khiển trên vô lăng (Next/Prev/Play/Pause)
+        // Khởi tạo MediaSession cho nút vô lăng
         setupMediaSession()
+
+        // Khởi tạo GPS đo tốc độ cho HUD
+        setupLocationUpdates()
 
         // Dọn dẹp khi Screen bị hủy
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onDestroy(owner: LifecycleOwner) {
+                releaseLocationUpdates()
                 releaseDisplay()
                 releaseMediaSession()
             }
         })
     }
+
+    // ─── GPS Speedometer ──────────────────────────────────────────────────────
+
+    private fun setupLocationUpdates() {
+        if (!config.isSpeedHudEnabled) return
+
+        val hasFine = ContextCompat.checkSelfPermission(
+            carContext, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val hasCoarse = ContextCompat.checkSelfPermission(
+            carContext, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasFine || hasCoarse) {
+            try {
+                locationManager = carContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                val provider = if (locationManager?.isProviderEnabled(LocationManager.GPS_PROVIDER) == true) {
+                    LocationManager.GPS_PROVIDER
+                } else {
+                    LocationManager.NETWORK_PROVIDER
+                }
+                locationManager?.requestLocationUpdates(provider, 1000L, 1.0f, this)
+                Log.d(TAG, "Location updates requested from $provider")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to request location updates: ${e.message}")
+            }
+        }
+    }
+
+    private fun releaseLocationUpdates() {
+        try {
+            locationManager?.removeUpdates(this)
+            locationManager = null
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to remove location updates: ${e.message}")
+        }
+    }
+
+    override fun onLocationChanged(location: Location) {
+        val rawSpeedKmh = location.speed * 3.6f
+        val offset = config.speedOffsetPercent
+        val adjustedSpeed = (rawSpeedKmh * (1f + offset / 100f)).toInt().coerceAtLeast(0)
+
+        carContext.mainExecutor.execute {
+            presentation?.updateSpeed(adjustedSpeed)
+        }
+    }
+
+    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+    override fun onProviderEnabled(provider: String) {}
+    override fun onProviderDisabled(provider: String) {}
+
+    // ─── MediaSession vô lăng ─────────────────────────────────────────────────
 
     private fun setupMediaSession() {
         try {
@@ -73,31 +138,19 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
 
                 setCallback(object : MediaSessionCompat.Callback() {
                     override fun onSkipToNext() {
-                        Log.d(TAG, "MediaSession: onSkipToNext (Vô lăng chuyển bài tiếp)")
-                        carContext.mainExecutor.execute {
-                            presentation?.mediaNext()
-                        }
+                        carContext.mainExecutor.execute { presentation?.mediaNext() }
                     }
 
                     override fun onSkipToPrevious() {
-                        Log.d(TAG, "MediaSession: onSkipToPrevious (Vô lăng lùi bài)")
-                        carContext.mainExecutor.execute {
-                            presentation?.mediaPrev()
-                        }
+                        carContext.mainExecutor.execute { presentation?.mediaPrev() }
                     }
 
                     override fun onPlay() {
-                        Log.d(TAG, "MediaSession: onPlay")
-                        carContext.mainExecutor.execute {
-                            presentation?.mediaPlayPause()
-                        }
+                        carContext.mainExecutor.execute { presentation?.mediaPlayPause() }
                     }
 
                     override fun onPause() {
-                        Log.d(TAG, "MediaSession: onPause")
-                        carContext.mainExecutor.execute {
-                            presentation?.mediaPlayPause()
-                        }
+                        carContext.mainExecutor.execute { presentation?.mediaPlayPause() }
                     }
 
                     override fun onMediaButtonEvent(mediaButtonIntent: Intent?): Boolean {
@@ -127,7 +180,6 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
 
                 isActive = true
             }
-            Log.d(TAG, "MediaSessionCompat initialized and active")
         } catch (e: Exception) {
             Log.e(TAG, "Error setting up MediaSessionCompat: ${e.message}", e)
         }
@@ -157,8 +209,8 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
             )
             .addAction(
                 Action.Builder()
-                    .setTitle("🗺️ Bản đồ")
-                    .setOnClickListener { onMapClicked() }
+                    .setTitle("💳 Mã QR")
+                    .setOnClickListener { onToggleQrClicked() }
                     .build()
             )
             .addAction(
@@ -189,20 +241,13 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
     // ─── SurfaceCallback ──────────────────────────────────────────────────────
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
-        Log.d(TAG, "onSurfaceAvailable: ${surfaceContainer.width}x${surfaceContainer.height} dpi=${surfaceContainer.dpi}")
-
-        val surface = surfaceContainer.surface ?: run {
-            Log.e(TAG, "Surface is null!")
-            return
-        }
+        val surface = surfaceContainer.surface ?: return
         val width = surfaceContainer.width.takeIf { it > 0 } ?: 1280
         val height = surfaceContainer.height.takeIf { it > 0 } ?: 720
         val dpi = surfaceContainer.dpi.takeIf { it > 0 } ?: 213
 
-        // Giải phóng VirtualDisplay cũ nếu có
         releaseDisplay()
 
-        // Tạo VirtualDisplay gắn với Surface của màn hình xe
         val displayManager = carContext.applicationContext
             .getSystemService(android.content.Context.DISPLAY_SERVICE) as DisplayManager
 
@@ -217,12 +262,8 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
                 flags
             )
 
-            val display = virtualDisplay?.display ?: run {
-                Log.e(TAG, "VirtualDisplay.display is null!")
-                return
-            }
+            val display = virtualDisplay?.display ?: return
 
-            // Tạo Presentation trên main thread (UI thread)
             carContext.mainExecutor.execute {
                 try {
                     val p = SplitScreenPresentation(
@@ -231,7 +272,6 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
                     )
                     p.show()
                     presentation = p
-                    Log.d(TAG, "Presentation shown successfully")
                 } catch (e: Exception) {
                     Log.e(TAG, "Presentation.show() failed: ${e.message}", e)
                 }
@@ -242,17 +282,11 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
     }
 
     override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) {
-        Log.d(TAG, "onSurfaceDestroyed")
         releaseDisplay()
     }
 
-    override fun onVisibleAreaChanged(visibleArea: android.graphics.Rect) {
-        Log.d(TAG, "onVisibleAreaChanged: $visibleArea")
-    }
-
-    override fun onStableAreaChanged(stableArea: android.graphics.Rect) {
-        Log.d(TAG, "onStableAreaChanged: $stableArea")
-    }
+    override fun onVisibleAreaChanged(visibleArea: android.graphics.Rect) {}
+    override fun onStableAreaChanged(stableArea: android.graphics.Rect) {}
 
     // ─── External Controls ───────────────────────────────────────────────────
 
@@ -266,14 +300,14 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
 
     private fun onHomeClicked() {
         carContext.mainExecutor.execute {
-            presentation?.mapWebView?.loadUrl("https://www.google.com/maps/@?api=1&map_action=map")
-            presentation?.mediaWebView?.loadUrl("https://m.youtube.com")
+            presentation?.loadGoogleMaps()
+            presentation?.loadYouTube()
         }
     }
 
-    private fun onMapClicked() {
+    private fun onToggleQrClicked() {
         carContext.mainExecutor.execute {
-            presentation?.mapWebView?.loadUrl("https://www.google.com/maps/@?api=1&map_action=map")
+            presentation?.togglePaymentQr()
         }
     }
 
@@ -313,6 +347,5 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
         } catch (e: Exception) {
             Log.w(TAG, "virtualDisplay release error: ${e.message}")
         }
-        Log.d(TAG, "releaseDisplay done")
     }
 }

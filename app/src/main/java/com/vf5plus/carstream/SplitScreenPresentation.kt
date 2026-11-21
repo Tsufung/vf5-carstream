@@ -2,6 +2,8 @@ package com.vf5plus.carstream
 
 import android.app.Presentation
 import android.content.Context
+import android.graphics.Color
+import android.graphics.Typeface
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -20,6 +22,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.io.ByteArrayInputStream
@@ -27,40 +30,47 @@ import java.io.ByteArrayInputStream
 /**
  * SplitScreenPresentation — hiển thị trên màn hình xe VF5 Plus 2025 (8 inch).
  *
- * Layout: Google Maps (trái, 2/3) | YouTube hoặc TikTok (phải, 1/3)
- *
- * FIX CRASH QUAN TRỌNG:
- * - Mọi View phải dùng [displayCtx] = this.context (Presentation.getContext()),
- *   KHÔNG dùng outerContext (applicationContext) để tạo View.
- * - outerContext chỉ dùng để khởi tạo super() và lấy system services ngoài Presentation.
+ * Tính năng tùy biến:
+ * - Tỉ lệ chia màn hình: 2/3 + 1/3, 50/50, Toàn màn hình Map, Toàn màn hình Media
+ * - HUD tốc độ GPS thực tế ở góc trên màn hình
+ * - Overlay Mã QR thanh toán cước xe cho khách Grab/XanhSM
+ * - Tab bar động hỗ trợ YouTube, TikTok, VTV Go, FPT Play và nút QR thu tiền
+ * - Chặn quảng cáo, AudioFocus tự dừng khi có cuộc gọi
  */
 class SplitScreenPresentation(
     private val outerContext: Context,
     display: Display
 ) : Presentation(outerContext, display, android.R.style.Theme_Material_NoActionBar) {
 
-    // Context aware với Display — phải lấy trong onCreate()
     private lateinit var displayCtx: Context
+    private val config: VF5Config by lazy { VF5Config(outerContext) }
 
-    // WebViews
+    // WebViews & Containers
     lateinit var mapWebView: WebView
         private set
     lateinit var mediaWebView: WebView
         private set
+    private lateinit var mapContainer: FrameLayout
+    private lateinit var rightColumn: LinearLayout
+    private lateinit var rootLayout: FrameLayout
 
-    // Tab state: true = YouTube, false = TikTok
-    private var isYouTubeActive = true
+    // HUD & QR Overlays
+    private lateinit var speedHudBadge: TextView
+    private lateinit var qrOverlayLayout: FrameLayout
+    private lateinit var qrImageView: ImageView
+    private lateinit var qrInstructionText: TextView
+
+    // Tab buttons map
+    private val tabButtons = mutableMapOf<String, TextView>()
+    var activeTab: String = "youtube"
+        private set
 
     // AudioFocus
     private var audioManager: AudioManager? = null
     private var focusRequest: AudioFocusRequest? = null
     private var hasAudioFocus = false
 
-    // Phát hiện tab đang active để steering wheel biết gửi lệnh đến đâu
-    var activeTab: String = "youtube"
-        private set
-
-    // Các domain quảng cáo cần chặn
+    // Chặn quảng cáo
     private val adDomains = setOf(
         "doubleclick.net",
         "googlesyndication.com",
@@ -90,10 +100,7 @@ class SplitScreenPresentation(
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // ⚠️ CRITICAL: lấy display-aware context từ Presentation, KHÔNG phải outerContext
         displayCtx = this.context
-
         audioManager = outerContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         buildLayout()
@@ -110,20 +117,25 @@ class SplitScreenPresentation(
     // ─── Layout ───────────────────────────────────────────────────────────────
 
     private fun buildLayout() {
-        // Root: ngang, full màn hình
-        val root = LinearLayout(displayCtx).apply {
-            orientation = LinearLayout.HORIZONTAL
+        rootLayout = FrameLayout(displayCtx).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-            setBackgroundColor(0xFF000000.toInt())
+            setBackgroundColor(if (config.themeMode == VF5Config.THEME_LIGHT) 0xFFF0F0F0.toInt() else 0xFF000000.toInt())
         }
 
-        // Cột trái: Google Maps — 2/3 màn hình
-        val mapContainer = FrameLayout(displayCtx).apply {
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 2f)
+        // Hàng ngang chính chứa Map và Media
+        val contentRow = LinearLayout(displayCtx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
         }
+
+        // 1. Map container
+        mapContainer = FrameLayout(displayCtx)
         mapWebView = buildMapWebView()
         mapContainer.addView(
             mapWebView,
@@ -133,17 +145,13 @@ class SplitScreenPresentation(
             )
         )
 
-        // Cột phải: YouTube/TikTok + tab bar — 1/3 màn hình
-        val rightColumn = LinearLayout(displayCtx).apply {
+        // 2. Right column (Media + TabBar)
+        rightColumn = LinearLayout(displayCtx).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
         }
-
-        // Tab bar (YouTube | TikTok)
         val tabBar = buildTabBar()
         rightColumn.addView(tabBar)
 
-        // Media WebView
         val mediaContainer = FrameLayout(displayCtx).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -161,15 +169,56 @@ class SplitScreenPresentation(
         )
         rightColumn.addView(mediaContainer)
 
-        root.addView(mapContainer)
-        root.addView(rightColumn)
+        // Áp dụng tỉ lệ màn hình
+        applyScreenRatio(contentRow)
 
-        setContentView(root)
+        contentRow.addView(mapContainer)
+        contentRow.addView(rightColumn)
+        rootLayout.addView(contentRow)
 
-        // Tải trang mặc định
-        loadYouTube()
+        // 3. HUD Tốc độ GPS (Góc trên trái)
+        speedHudBadge = buildSpeedHudBadge()
+        rootLayout.addView(speedHudBadge)
+
+        // 4. Modal Overlay Mã QR thanh toán
+        qrOverlayLayout = buildQrOverlay()
+        rootLayout.addView(qrOverlayLayout)
+
+        setContentView(rootLayout)
+
+        // Nạp trang mặc định
         loadGoogleMaps()
+        loadYouTube()
     }
+
+    private fun applyScreenRatio(contentRow: LinearLayout) {
+        when (config.screenRatio) {
+            VF5Config.RATIO_SPLIT_2_3 -> {
+                mapContainer.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 2f)
+                rightColumn.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+                mapContainer.visibility = View.VISIBLE
+                rightColumn.visibility = View.VISIBLE
+            }
+            VF5Config.RATIO_SPLIT_1_2 -> {
+                mapContainer.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+                rightColumn.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+                mapContainer.visibility = View.VISIBLE
+                rightColumn.visibility = View.VISIBLE
+            }
+            VF5Config.RATIO_FULL_MAP -> {
+                mapContainer.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                mapContainer.visibility = View.VISIBLE
+                rightColumn.visibility = View.GONE
+            }
+            VF5Config.RATIO_FULL_MEDIA -> {
+                rightColumn.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                mapContainer.visibility = View.GONE
+                rightColumn.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    // ─── Tab Bar ──────────────────────────────────────────────────────────────
 
     private fun buildTabBar(): LinearLayout {
         val tabBar = LinearLayout(displayCtx).apply {
@@ -178,58 +227,234 @@ class SplitScreenPresentation(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dpToPx(44)
             )
-            setBackgroundColor(0xFF1A1A2E.toInt())
+            setBackgroundColor(0xFF1E1B18.toInt())
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        val ytBtn = TextView(displayCtx).apply {
-            text = "▶ YouTube"
+        // YouTube
+        if (config.isYouTubeEnabled) {
+            val btn = createTabButton("▶ YouTube", "youtube") {
+                selectTab("youtube")
+                loadYouTube()
+            }
+            tabBar.addView(btn)
+        }
+
+        // TikTok
+        if (config.isTikTokEnabled) {
+            val btn = createTabButton("♪ TikTok", "tiktok") {
+                selectTab("tiktok")
+                loadTikTok()
+            }
+            tabBar.addView(btn)
+        }
+
+        // VTV Go
+        if (config.isVtvGoEnabled) {
+            val btn = createTabButton("📺 VTV Go", "vtvgo") {
+                selectTab("vtvgo")
+                mediaWebView.loadUrl("https://vtvgo.vn")
+            }
+            tabBar.addView(btn)
+        }
+
+        // FPT Play
+        if (config.isFptPlayEnabled) {
+            val btn = createTabButton("⚽ FPT Play", "fptplay") {
+                selectTab("fptplay")
+                mediaWebView.loadUrl("https://fptplay.vn")
+            }
+            tabBar.addView(btn)
+        }
+
+        // Nút QR Thu Tiền (Luôn có để tài xế 1 chạm mở QR)
+        val qrBtn = TextView(displayCtx).apply {
+            text = "💳 QR Thu Tiền"
             setTextColor(0xFFFFFFFF.toInt())
-            textSize = 13f
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-            setBackgroundColor(0xFF0F3460.toInt())
+            setBackgroundColor(0xFFC86A3E.toInt()) // Màu cam nhấn mạnh
             setPadding(4, 0, 4, 0)
-            tag = "yt_tab"
+            setOnClickListener {
+                togglePaymentQr()
+            }
         }
+        tabBar.addView(qrBtn)
 
-        val tkBtn = TextView(displayCtx).apply {
-            text = "♪ TikTok"
-            setTextColor(0xFFCCCCCC.toInt())
-            textSize = 13f
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-            setBackgroundColor(0xFF0D0D0D.toInt())
-            setPadding(4, 0, 4, 0)
-            tag = "tk_tab"
-        }
-
-        ytBtn.setOnClickListener {
-            isYouTubeActive = true
-            activeTab = "youtube"
-            ytBtn.setBackgroundColor(0xFF0F3460.toInt())
-            ytBtn.setTextColor(0xFFFFFFFF.toInt())
-            tkBtn.setBackgroundColor(0xFF0D0D0D.toInt())
-            tkBtn.setTextColor(0xFFCCCCCC.toInt())
-            loadYouTube()
-        }
-
-        tkBtn.setOnClickListener {
-            isYouTubeActive = false
-            activeTab = "tiktok"
-            tkBtn.setBackgroundColor(0xFF69C9D0.toInt())
-            tkBtn.setTextColor(0xFF000000.toInt())
-            ytBtn.setBackgroundColor(0xFF0D0D0D.toInt())
-            ytBtn.setTextColor(0xFFCCCCCC.toInt())
-            loadTikTok()
-        }
-
-        tabBar.addView(ytBtn)
-        tabBar.addView(tkBtn)
+        selectTab("youtube")
         return tabBar
     }
 
-    // ─── WebView builders ─────────────────────────────────────────────────────
+    private fun createTabButton(title: String, tag: String, onClick: () -> Unit): TextView {
+        val btn = TextView(displayCtx).apply {
+            text = title
+            setTextColor(0xFFCCCCCC.toInt())
+            textSize = 12f
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+            setBackgroundColor(0xFF141210.toInt())
+            setPadding(2, 0, 2, 0)
+            setOnClickListener { onClick() }
+        }
+        tabButtons[tag] = btn
+        return btn
+    }
+
+    private fun selectTab(tag: String) {
+        activeTab = tag
+        tabButtons.forEach { (t, btn) ->
+            if (t == tag) {
+                btn.setBackgroundColor(0xFF3D352E.toInt())
+                btn.setTextColor(0xFFFFFFFF.toInt())
+                btn.setTypeface(null, Typeface.BOLD)
+            } else {
+                btn.setBackgroundColor(0xFF141210.toInt())
+                btn.setTextColor(0xFFAAAAAA.toInt())
+                btn.setTypeface(null, Typeface.NORMAL)
+            }
+        }
+    }
+
+    // ─── HUD Tốc độ GPS ──────────────────────────────────────────────────────
+
+    private fun buildSpeedHudBadge(): TextView {
+        return TextView(displayCtx).apply {
+            text = "0 km/h"
+            setTextColor(0xFF00FF7F.toInt()) // Xanh dạ quang dễ nhìn
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            val padH = dpToPx(12)
+            val padV = dpToPx(6)
+            setPadding(padH, padV, padH, padV)
+            setBackgroundColor(0xDD000000.toInt())
+
+            val lp = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                topMargin = dpToPx(10)
+                marginStart = dpToPx(10)
+            }
+            layoutParams = lp
+            visibility = if (config.isSpeedHudEnabled) View.VISIBLE else View.GONE
+        }
+    }
+
+    fun updateSpeed(speedKmh: Int) {
+        if (!config.isSpeedHudEnabled) {
+            speedHudBadge.visibility = View.GONE
+            return
+        }
+        speedHudBadge.visibility = View.VISIBLE
+        speedHudBadge.text = "$speedKmh km/h"
+
+        // Đổi màu cảnh báo nếu chạy quá tốc độ (trên 80km/h)
+        if (speedKmh > 80) {
+            speedHudBadge.setTextColor(0xFFFF3333.toInt()) // Đỏ cảnh báo
+        } else {
+            speedHudBadge.setTextColor(0xFF00FF7F.toInt()) // Xanh an toàn
+        }
+    }
+
+    // ─── Modal Overlay Mã QR Thanh Toán ──────────────────────────────────────
+
+    private fun buildQrOverlay(): FrameLayout {
+        val overlay = FrameLayout(displayCtx).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(0xEE000000.toInt())
+            visibility = View.GONE
+            isClickable = true
+        }
+
+        val card = LinearLayout(displayCtx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            val pad = dpToPx(16)
+            setPadding(pad, pad, pad, pad)
+            setBackgroundColor(0xFFFFFFFF.toInt())
+            val lp = FrameLayout.LayoutParams(
+                dpToPx(380),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER
+            }
+            layoutParams = lp
+        }
+
+        val titleTv = TextView(displayCtx).apply {
+            text = "💳 QUÉT MÃ QR THANH TOÁN"
+            setTextColor(0xFF2D251F.toInt())
+            textSize = 16f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+        }
+        card.addView(titleTv)
+
+        qrInstructionText = TextView(displayCtx).apply {
+            text = "Khách chuyển khoản bằng ứng dụng ngân hàng hoặc MoMo"
+            setTextColor(0xFF7C746D.toInt())
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setPadding(0, dpToPx(4), 0, dpToPx(10))
+        }
+        card.addView(qrInstructionText)
+
+        qrImageView = ImageView(displayCtx).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                dpToPx(240),
+                dpToPx(240)
+            )
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        card.addView(qrImageView)
+
+        val closeBtn = TextView(displayCtx).apply {
+            text = "✕ ĐÓNG"
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setBackgroundColor(0xFFC86A3E.toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dpToPx(42)
+            ).apply {
+                topMargin = dpToPx(12)
+            }
+            setOnClickListener {
+                overlay.visibility = View.GONE
+            }
+        }
+        card.addView(closeBtn)
+
+        overlay.addView(card)
+        return overlay
+    }
+
+    fun togglePaymentQr() {
+        if (qrOverlayLayout.visibility == View.VISIBLE) {
+            qrOverlayLayout.visibility = View.GONE
+        } else {
+            val bitmap = config.getQrBitmap()
+            if (bitmap != null) {
+                qrImageView.setImageBitmap(bitmap)
+                qrInstructionText.text = "Khách chuyển khoản bằng ứng dụng ngân hàng hoặc MoMo"
+            } else {
+                qrImageView.setImageDrawable(null)
+                qrInstructionText.text = "Chưa có ảnh mã QR. Hãy mở app VF5 CarStream trên điện thoại để chọn ảnh QR ngân hàng của bạn."
+            }
+            qrOverlayLayout.visibility = View.VISIBLE
+        }
+    }
+
+    // ─── WebViews ─────────────────────────────────────────────────────────────
 
     private fun buildMapWebView(): WebView {
         val wv = WebView(displayCtx)
@@ -254,7 +479,6 @@ class SplitScreenPresentation(
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
-                // Mở Google Maps native khi bấm điều hướng
                 if (url.startsWith("geo:") || url.contains("maps.google.com") && url.contains("navigate")) {
                     try {
                         val intent = android.content.Intent(
@@ -298,13 +522,11 @@ class SplitScreenPresentation(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 safeBrowsingEnabled = false
             }
-            // Cho phép lưu cookie đăng nhập
             allowFileAccess = true
             allowContentAccess = true
         }
         wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
-        // Bật cookie toàn cục để lưu đăng nhập YouTube/TikTok
         android.webkit.CookieManager.getInstance().apply {
             setAcceptCookie(true)
             setAcceptThirdPartyCookies(wv, true)
@@ -316,7 +538,6 @@ class SplitScreenPresentation(
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                // Inject script chặn quảng cáo YouTube
                 if (url.contains("youtube.com")) {
                     injectYouTubeAdBlock(view)
                 }
@@ -325,7 +546,6 @@ class SplitScreenPresentation(
 
         wv.webChromeClient = object : WebChromeClient() {
             override fun onShowCustomView(view: View, callback: CustomViewCallback) {
-                // Fullscreen video — chiếm toàn Presentation
                 val rootView = window?.decorView as? FrameLayout ?: return
                 view.layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -345,37 +565,31 @@ class SplitScreenPresentation(
         return wv
     }
 
-    // ─── Load URLs ────────────────────────────────────────────────────────────
+    // ─── Navigation ───────────────────────────────────────────────────────────
 
-    private fun loadGoogleMaps() {
-        // Google Maps embed tương tác đầy đủ
+    fun loadGoogleMaps() {
         mapWebView.loadUrl("https://www.google.com/maps/@?api=1&map_action=map")
     }
 
-    private fun loadYouTube() {
+    fun loadYouTube() {
         mediaWebView.loadUrl("https://m.youtube.com")
     }
 
-    private fun loadTikTok() {
+    fun loadTikTok() {
         mediaWebView.loadUrl("https://www.tiktok.com")
     }
 
     fun loadMediaUrl(url: String) {
         if (url.contains("tiktok.com")) {
-            isYouTubeActive = false
-            activeTab = "tiktok"
-        } else {
-            isYouTubeActive = true
-            activeTab = "youtube"
+            selectTab("tiktok")
+        } else if (url.contains("youtube.com")) {
+            selectTab("youtube")
         }
         mediaWebView.loadUrl(url)
     }
 
-    // ─── Steering wheel controls ──────────────────────────────────────────────
+    // ─── Steering Wheel ───────────────────────────────────────────────────────
 
-    /**
-     * Gọi từ CarStreamScreen khi người dùng bấm nút KEYCODE_MEDIA_NEXT
-     */
     fun mediaNext() {
         if (activeTab == "youtube") {
             mediaWebView.evaluateJavascript(
@@ -389,8 +603,7 @@ class SplitScreenPresentation(
                 })()
                 """.trimIndent(), null
             )
-        } else {
-            // TikTok: vuốt lên để xem video tiếp theo
+        } else if (activeTab == "tiktok") {
             mediaWebView.evaluateJavascript(
                 """
                 (function() {
@@ -401,9 +614,6 @@ class SplitScreenPresentation(
         }
     }
 
-    /**
-     * Gọi từ CarStreamScreen khi người dùng bấm nút KEYCODE_MEDIA_PREVIOUS
-     */
     fun mediaPrev() {
         if (activeTab == "youtube") {
             mediaWebView.evaluateJavascript(
@@ -417,8 +627,7 @@ class SplitScreenPresentation(
                 })()
                 """.trimIndent(), null
             )
-        } else {
-            // TikTok: vuốt xuống video trước
+        } else if (activeTab == "tiktok") {
             mediaWebView.evaluateJavascript(
                 """
                 (function() {
@@ -429,71 +638,17 @@ class SplitScreenPresentation(
         }
     }
 
-    /**
-     * Gọi khi bấm nút Play/Pause trên vô lăng
-     */
     fun mediaPlayPause() {
-        if (activeTab == "youtube") {
-            mediaWebView.evaluateJavascript(
-                """
-                (function() {
-                    var video = document.querySelector('video');
-                    if (video) {
-                        if (video.paused) video.play(); else video.pause();
-                        return video.paused ? 'paused' : 'playing';
-                    }
-                    return 'no_video';
-                })()
-                """.trimIndent(), null
-            )
-        } else {
-            mediaWebView.evaluateJavascript(
-                """
-                (function() {
-                    var video = document.querySelector('video');
-                    if (video) {
-                        if (video.paused) video.play(); else video.pause();
-                    }
-                })()
-                """.trimIndent(), null
-            )
-        }
-    }
-
-    // ─── Touch forwarding ─────────────────────────────────────────────────────
-
-    fun handleTouch(x: Float, y: Float) {
-        val downTime = android.os.SystemClock.uptimeMillis()
-        val eventDown = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0)
-        val eventUp = MotionEvent.obtain(downTime, downTime + 50, MotionEvent.ACTION_UP, x, y, 0)
-
-        val displayWidth = window?.decorView?.width ?: 1280
-        val mapWidth = displayWidth * 2 / 3
-
-        if (x < mapWidth) {
-            mapWebView.dispatchTouchEvent(eventDown)
-            mapWebView.dispatchTouchEvent(eventUp)
-        } else {
-            val adjustedX = x - mapWidth
-            val eventDownAdj = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, adjustedX, y, 0)
-            val eventUpAdj = MotionEvent.obtain(downTime, downTime + 50, MotionEvent.ACTION_UP, adjustedX, y, 0)
-            mediaWebView.dispatchTouchEvent(eventDownAdj)
-            mediaWebView.dispatchTouchEvent(eventUpAdj)
-            eventDownAdj.recycle()
-            eventUpAdj.recycle()
-        }
-        eventDown.recycle()
-        eventUp.recycle()
-    }
-
-    fun handleScroll(x: Float, y: Float, distanceX: Float, distanceY: Float) {
-        val displayWidth = window?.decorView?.width ?: 1280
-        val mapWidth = displayWidth * 2 / 3
-        if (x < mapWidth) {
-            mapWebView.scrollBy(distanceX.toInt(), distanceY.toInt())
-        } else {
-            mediaWebView.scrollBy(distanceX.toInt(), distanceY.toInt())
-        }
+        mediaWebView.evaluateJavascript(
+            """
+            (function() {
+                var video = document.querySelector('video');
+                if (video) {
+                    if (video.paused) video.play(); else video.pause();
+                }
+            })()
+            """.trimIndent(), null
+        )
     }
 
     // ─── AudioFocus ───────────────────────────────────────────────────────────
@@ -527,10 +682,11 @@ class SplitScreenPresentation(
     }
 
     private fun handleAudioFocusChange(focusChange: Int) {
+        if (!config.isCallAutoPauseEnabled) return
+
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                // Tạm dừng video khi có cuộc gọi / trợ lý ảo
                 mediaWebView.post {
                     mediaWebView.evaluateJavascript(
                         "document.querySelector('video')?.pause();", null
@@ -539,7 +695,6 @@ class SplitScreenPresentation(
                 hasAudioFocus = false
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
-                // Tiếp tục phát sau khi cuộc gọi kết thúc
                 mediaWebView.post {
                     mediaWebView.evaluateJavascript(
                         "document.querySelector('video')?.play();", null
@@ -579,7 +734,6 @@ class SplitScreenPresentation(
         webView.evaluateJavascript(
             """
             (function() {
-                // Ẩn quảng cáo overlay
                 var style = document.createElement('style');
                 style.innerHTML = `
                     .ad-showing .video-ads { display: none !important; }
@@ -592,7 +746,6 @@ class SplitScreenPresentation(
                 `;
                 document.head.appendChild(style);
                 
-                // Tự skip quảng cáo
                 setInterval(function() {
                     var skipBtn = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button');
                     if (skipBtn) skipBtn.click();
@@ -620,12 +773,9 @@ class SplitScreenPresentation(
                 mapIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 outerContext.startActivity(mapIntent)
             } catch (e: Exception) {
-                // Fallback: mở URL maps thông thường
             }
         }
     }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private fun dpToPx(dp: Int): Int {
         return (dp * displayCtx.resources.displayMetrics.density).toInt()

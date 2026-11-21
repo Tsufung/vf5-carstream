@@ -1,185 +1,373 @@
 package com.vf5plus.carstream
 
-import android.content.SharedPreferences
+import android.Manifest
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.webkit.WebView
+import android.widget.Button
+import android.widget.SeekBar
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import androidx.core.content.ContextCompat
 import com.vf5plus.carstream.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
 
-    companion object {
-        const val PREFS_NAME = "vf5_carstream_prefs"
-        const val KEY_BOOKMARKS = "bookmarks"
-        const val KEY_AUTO_RESUME = "auto_resume"
-        const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var config: VF5Config
+
+    // Photo pickers
+    private val pickQrLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            val success = config.saveQrImageFromUri(uri)
+            if (success) {
+                updateQrPreview()
+                Toast.makeText(this, "Đã lưu mã QR thanh toán!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Không thể lưu ảnh QR", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
-    private lateinit var binding: ActivityMainBinding
-    private lateinit var prefs: SharedPreferences
-    private lateinit var bookmarkAdapter: BookmarkAdapter
-    private val gson = Gson()
-    private val bookmarkList = mutableListOf<Bookmark>()
+    private val pickCarLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            val success = config.saveCarImageFromUri(uri)
+            if (success) {
+                updateCarPreview()
+                Toast.makeText(this, "Đã lưu ảnh xe!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Không thể lưu ảnh xe", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Permission request for GPS speed
+    private val requestLocationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+        if (fineGranted || coarseGranted) {
+            config.isSpeedHudEnabled = true
+            binding.switchSpeedHud.isChecked = true
+            Toast.makeText(this, "Đã cấp quyền GPS thành công!", Toast.LENGTH_SHORT).show()
+        } else {
+            config.isSpeedHudEnabled = false
+            binding.switchSpeedHud.isChecked = false
+            Toast.makeText(this, "Cần quyền GPS để đo tốc độ xe", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        config = VF5Config(this)
 
-        setupToolbar()
-        setupBookmarkList()
-        setupSwitches()
-        setupButtons()
-        loadSettings()
+        setupRatioButtons()
+        setupThemeButtons()
+        setupToolbarButtons()
+        setupImages()
+        setupSpeedHud()
+        setupCallSettings()
+        setupAppToggles()
+        setupClearCache()
     }
 
-    private fun setupToolbar() {
-        setSupportActionBar(binding.toolbar)
-        supportActionBar?.title = "VF5 CarStream Settings"
-    }
+    // ─── 1. Ratio buttons ─────────────────────────────────────────────────────
 
-    private fun setupBookmarkList() {
-        bookmarkAdapter = BookmarkAdapter(bookmarkList) { position ->
-            showDeleteBookmarkDialog(position)
-        }
-        binding.recyclerBookmarks.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = bookmarkAdapter
-        }
-        loadBookmarks()
-    }
+    private fun setupRatioButtons() {
+        updateRatioUi(config.screenRatio)
 
-    private fun setupSwitches() {
-        binding.switchAutoResume.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean(KEY_AUTO_RESUME, isChecked).apply()
-            val msg = if (isChecked) "Đã bật tự động mở lại video" else "Đã tắt tự động mở lại video"
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        binding.btnRatio23.setOnClickListener {
+            config.screenRatio = VF5Config.RATIO_SPLIT_2_3
+            updateRatioUi(VF5Config.RATIO_SPLIT_2_3)
         }
-
-        binding.switchKeepScreenOn.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean(KEY_KEEP_SCREEN_ON, isChecked).apply()
-            val msg = if (isChecked) "Đã bật giữ màn hình sáng" else "Đã tắt giữ màn hình sáng"
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        binding.btnRatio12.setOnClickListener {
+            config.screenRatio = VF5Config.RATIO_SPLIT_1_2
+            updateRatioUi(VF5Config.RATIO_SPLIT_1_2)
+        }
+        binding.btnRatioFullMap.setOnClickListener {
+            config.screenRatio = VF5Config.RATIO_FULL_MAP
+            updateRatioUi(VF5Config.RATIO_FULL_MAP)
+        }
+        binding.btnRatioFullMedia.setOnClickListener {
+            config.screenRatio = VF5Config.RATIO_FULL_MEDIA
+            updateRatioUi(VF5Config.RATIO_FULL_MEDIA)
         }
     }
 
-    private fun setupButtons() {
-        binding.btnAddBookmark.setOnClickListener {
-            showAddBookmarkDialog()
+    private fun updateRatioUi(selectedRatio: String) {
+        val activeColor = ContextCompat.getColor(this, R.color.colorAccentWarm)
+        val inactiveColor = ContextCompat.getColor(this, R.color.pillInactive)
+        val activeTextColor = Color.WHITE
+        val inactiveTextColor = ContextCompat.getColor(this, R.color.pillInactiveText)
+
+        val buttons = mapOf(
+            VF5Config.RATIO_SPLIT_2_3 to binding.btnRatio23,
+            VF5Config.RATIO_SPLIT_1_2 to binding.btnRatio12,
+            VF5Config.RATIO_FULL_MAP to binding.btnRatioFullMap,
+            VF5Config.RATIO_FULL_MEDIA to binding.btnRatioFullMedia
+        )
+
+        buttons.forEach { (ratio, btn) ->
+            if (ratio == selectedRatio) {
+                btn.setBackgroundColor(activeColor)
+                btn.setTextColor(activeTextColor)
+            } else {
+                btn.setBackgroundColor(inactiveColor)
+                btn.setTextColor(inactiveTextColor)
+            }
+        }
+    }
+
+    // ─── 2. Theme buttons ─────────────────────────────────────────────────────
+
+    private fun setupThemeButtons() {
+        updateThemeUi(config.themeMode)
+
+        binding.btnThemeAuto.setOnClickListener {
+            config.themeMode = VF5Config.THEME_AUTO
+            updateThemeUi(VF5Config.THEME_AUTO)
+        }
+        binding.btnThemePhone.setOnClickListener {
+            config.themeMode = VF5Config.THEME_PHONE
+            updateThemeUi(VF5Config.THEME_PHONE)
+        }
+        binding.btnThemeDark.setOnClickListener {
+            config.themeMode = VF5Config.THEME_DARK
+            updateThemeUi(VF5Config.THEME_DARK)
+        }
+    }
+
+    private fun updateThemeUi(selectedTheme: String) {
+        val activeColor = ContextCompat.getColor(this, R.color.colorAccentWarm)
+        val inactiveColor = ContextCompat.getColor(this, R.color.pillInactive)
+        val activeTextColor = Color.WHITE
+        val inactiveTextColor = ContextCompat.getColor(this, R.color.pillInactiveText)
+
+        val buttons = mapOf(
+            VF5Config.THEME_AUTO to binding.btnThemeAuto,
+            VF5Config.THEME_PHONE to binding.btnThemePhone,
+            VF5Config.THEME_DARK to binding.btnThemeDark
+        )
+
+        buttons.forEach { (theme, btn) ->
+            if (theme == selectedTheme) {
+                btn.setBackgroundColor(activeColor)
+                btn.setTextColor(activeTextColor)
+            } else {
+                btn.setBackgroundColor(inactiveColor)
+                btn.setTextColor(inactiveTextColor)
+            }
+        }
+    }
+
+    // ─── 3. Toolbar buttons ───────────────────────────────────────────────────
+
+    private fun setupToolbarButtons() {
+        updateToolbarUi(config.toolbarMode)
+
+        binding.btnToolbarFixed.setOnClickListener {
+            config.toolbarMode = VF5Config.TOOLBAR_FIXED
+            updateToolbarUi(VF5Config.TOOLBAR_FIXED)
+        }
+        binding.btnToolbarFloating.setOnClickListener {
+            config.toolbarMode = VF5Config.TOOLBAR_FLOATING
+            updateToolbarUi(VF5Config.TOOLBAR_FLOATING)
+        }
+        binding.btnToolbarAutoHide.setOnClickListener {
+            config.toolbarMode = VF5Config.TOOLBAR_AUTO_HIDE
+            updateToolbarUi(VF5Config.TOOLBAR_AUTO_HIDE)
+        }
+    }
+
+    private fun updateToolbarUi(selectedMode: String) {
+        val activeColor = ContextCompat.getColor(this, R.color.colorAccentWarm)
+        val inactiveColor = ContextCompat.getColor(this, R.color.pillInactive)
+        val activeTextColor = Color.WHITE
+        val inactiveTextColor = ContextCompat.getColor(this, R.color.pillInactiveText)
+
+        val buttons = mapOf(
+            VF5Config.TOOLBAR_FIXED to binding.btnToolbarFixed,
+            VF5Config.TOOLBAR_FLOATING to binding.btnToolbarFloating,
+            VF5Config.TOOLBAR_AUTO_HIDE to binding.btnToolbarAutoHide
+        )
+
+        buttons.forEach { (mode, btn) ->
+            if (mode == selectedMode) {
+                btn.setBackgroundColor(activeColor)
+                btn.setTextColor(activeTextColor)
+            } else {
+                btn.setBackgroundColor(inactiveColor)
+                btn.setTextColor(inactiveTextColor)
+            }
+        }
+    }
+
+    // ─── 4. Images (QR & Car) ─────────────────────────────────────────────────
+
+    private fun setupImages() {
+        updateQrPreview()
+        updateCarPreview()
+
+        binding.btnPickQr.setOnClickListener {
+            pickQrLauncher.launch("image/*")
+        }
+        binding.btnResetQr.setOnClickListener {
+            config.deleteQrImage()
+            updateQrPreview()
+            Toast.makeText(this, "Đã xóa ảnh QR", Toast.LENGTH_SHORT).show()
         }
 
-        binding.btnClearCache.setOnClickListener {
-            showClearCacheDialog()
+        binding.btnPickCar.setOnClickListener {
+            pickCarLauncher.launch("image/*")
         }
-
-        binding.btnCopyAdbCommand.setOnClickListener {
-            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            val clip = android.content.ClipData.newPlainText(
-                "ADB Install Command",
-                """adb install -i "com.android.vending" app-debug.apk"""
-            )
-            clipboard.setPrimaryClip(clip)
-            Toast.makeText(this, "Đã copy lệnh ADB vào clipboard!", Toast.LENGTH_SHORT).show()
+        binding.btnResetCar.setOnClickListener {
+            config.deleteCarImage()
+            updateCarPreview()
+            Toast.makeText(this, "Đã xóa ảnh xe", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun loadSettings() {
-        binding.switchAutoResume.isChecked = prefs.getBoolean(KEY_AUTO_RESUME, true)
-        binding.switchKeepScreenOn.isChecked = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false)
+    private fun updateQrPreview() {
+        val bitmap = config.getQrBitmap()
+        if (bitmap != null) {
+            binding.ivQrPreview.setImageBitmap(bitmap)
+        } else {
+            binding.ivQrPreview.setImageDrawable(null)
+            binding.ivQrPreview.setBackgroundColor(ContextCompat.getColor(this, R.color.pillInactive))
+        }
     }
 
-    private fun loadBookmarks() {
-        val json = prefs.getString(KEY_BOOKMARKS, "[]") ?: "[]"
-        val type = object : TypeToken<List<Bookmark>>() {}.type
-        val list: List<Bookmark> = gson.fromJson(json, type) ?: emptyList()
-        bookmarkList.clear()
-        bookmarkList.addAll(list)
-        bookmarkAdapter.notifyDataSetChanged()
+    private fun updateCarPreview() {
+        val bitmap = config.getCarBitmap()
+        if (bitmap != null) {
+            binding.ivCarPreview.setImageBitmap(bitmap)
+        } else {
+            binding.ivCarPreview.setImageDrawable(null)
+            binding.ivCarPreview.setBackgroundColor(ContextCompat.getColor(this, R.color.pillInactive))
+        }
     }
 
-    private fun saveBookmarks() {
-        val json = gson.toJson(bookmarkList)
-        prefs.edit().putString(KEY_BOOKMARKS, json).apply()
-    }
+    // ─── 5. Speed HUD ─────────────────────────────────────────────────────────
 
-    private fun showAddBookmarkDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_add_bookmark, null)
-        val etTitle = dialogView.findViewById<android.widget.EditText>(R.id.etBookmarkTitle)
-        val etUrl = dialogView.findViewById<android.widget.EditText>(R.id.etBookmarkUrl)
+    private fun setupSpeedHud() {
+        binding.switchSpeedHud.isChecked = config.isSpeedHudEnabled
+        binding.switchSpeedHud.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                // Kiểm tra quyền GPS
+                val hasFine = ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
 
-        AlertDialog.Builder(this)
-            .setTitle("Thêm Bookmark")
-            .setView(dialogView)
-            .setPositiveButton("Thêm") { _, _ ->
-                val title = etTitle.text.toString().trim()
-                val url = etUrl.text.toString().trim()
-                if (title.isNotEmpty() && url.isNotEmpty()) {
-                    val finalUrl = if (url.startsWith("http://") || url.startsWith("https://")) {
-                        url
-                    } else {
-                        "https://$url"
-                    }
-                    bookmarkList.add(Bookmark(title, finalUrl))
-                    bookmarkAdapter.notifyItemInserted(bookmarkList.size - 1)
-                    saveBookmarks()
-                    Toast.makeText(this, "Đã thêm bookmark: $title", Toast.LENGTH_SHORT).show()
+                if (!hasFine) {
+                    requestLocationPermissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
                 } else {
-                    Toast.makeText(this, "Vui lòng nhập đầy đủ thông tin", Toast.LENGTH_SHORT).show()
+                    config.isSpeedHudEnabled = true
                 }
+            } else {
+                config.isSpeedHudEnabled = false
             }
-            .setNegativeButton("Hủy", null)
-            .show()
+        }
+
+        // SeekBar bù tốc độ: 0 -> 20 tương ứng -10% -> +10%
+        val currentOffset = config.speedOffsetPercent
+        binding.seekBarSpeedOffset.progress = currentOffset + 10
+        updateSpeedOffsetText(currentOffset)
+
+        binding.seekBarSpeedOffset.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                val offset = progress - 10
+                config.speedOffsetPercent = offset
+                updateSpeedOffsetText(offset)
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
     }
 
-    private fun showDeleteBookmarkDialog(position: Int) {
-        val bookmark = bookmarkList[position]
-        AlertDialog.Builder(this)
-            .setTitle("Xóa Bookmark")
-            .setMessage("Bạn có chắc muốn xóa \"${bookmark.title}\"?")
-            .setPositiveButton("Xóa") { _, _ ->
-                bookmarkList.removeAt(position)
-                bookmarkAdapter.notifyItemRemoved(position)
-                saveBookmarks()
-                Toast.makeText(this, "Đã xóa bookmark", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("Hủy", null)
-            .show()
+    private fun updateSpeedOffsetText(offset: Int) {
+        val sign = if (offset > 0) "+$offset%" else "$offset%"
+        binding.tvSpeedOffset.text = "Bù tốc độ theo đồng hồ xe: $sign"
     }
 
-    private fun showClearCacheDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Xóa Cache & Cookies")
-            .setMessage("Bạn có chắc muốn xóa toàn bộ cache và cookies của WebView? Bạn sẽ phải đăng nhập lại các tài khoản.")
-            .setPositiveButton("Xóa") { _, _ ->
-                clearWebViewData()
-            }
-            .setNegativeButton("Hủy", null)
-            .show()
+    // ─── 6. Call settings ─────────────────────────────────────────────────────
+
+    private fun setupCallSettings() {
+        binding.switchCallAutoPause.isChecked = config.isCallAutoPauseEnabled
+        binding.switchCallAutoPause.setOnCheckedChangeListener { _, isChecked ->
+            config.isCallAutoPauseEnabled = isChecked
+        }
+
+        binding.switchCallRingtone.isChecked = config.isCallRingtonePhone
+        binding.switchCallRingtone.setOnCheckedChangeListener { _, isChecked ->
+            config.isCallRingtonePhone = isChecked
+        }
     }
 
-    private fun clearWebViewData() {
-        try {
-            val webView = WebView(this)
-            webView.clearCache(true)
-            webView.clearHistory()
-            webView.clearFormData()
-            WebStorage.getInstance().deleteAllData()
-            CookieManager.getInstance().apply {
-                removeAllCookies(null)
-                flush()
-            }
-            Toast.makeText(this, "Đã xóa cache và cookies thành công!", Toast.LENGTH_LONG).show()
-        } catch (e: Exception) {
-            Toast.makeText(this, "Lỗi khi xóa: ${e.message}", Toast.LENGTH_SHORT).show()
+    // ─── 7. App toggles ───────────────────────────────────────────────────────
+
+    private fun setupAppToggles() {
+        binding.switchAppYouTube.isChecked = config.isYouTubeEnabled
+        binding.switchAppYouTube.setOnCheckedChangeListener { _, isChecked ->
+            config.isYouTubeEnabled = isChecked
+        }
+
+        binding.switchAppTikTok.isChecked = config.isTikTokEnabled
+        binding.switchAppTikTok.setOnCheckedChangeListener { _, isChecked ->
+            config.isTikTokEnabled = isChecked
+        }
+
+        binding.switchAppVtvGo.isChecked = config.isVtvGoEnabled
+        binding.switchAppVtvGo.setOnCheckedChangeListener { _, isChecked ->
+            config.isVtvGoEnabled = isChecked
+        }
+
+        binding.switchAppFptPlay.isChecked = config.isFptPlayEnabled
+        binding.switchAppFptPlay.setOnCheckedChangeListener { _, isChecked ->
+            config.isFptPlayEnabled = isChecked
+        }
+    }
+
+    // ─── 8. Clear cache ───────────────────────────────────────────────────────
+
+    private fun setupClearCache() {
+        binding.btnClearCache.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Xóa Cache & Đăng xuất")
+                .setMessage("Bạn có chắc muốn xóa toàn bộ cookies và cache? Bạn sẽ cần đăng nhập lại YouTube và TikTok.")
+                .setPositiveButton("Xóa") { _, _ ->
+                    try {
+                        val webView = WebView(this)
+                        webView.clearCache(true)
+                        webView.clearHistory()
+                        webView.clearFormData()
+                        WebStorage.getInstance().deleteAllData()
+                        CookieManager.getInstance().apply {
+                            removeAllCookies(null)
+                            flush()
+                        }
+                        Toast.makeText(this, "Đã xóa toàn bộ cache và cookies!", Toast.LENGTH_LONG).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .setNegativeButton("Hủy", null)
+                .show()
         }
     }
 }
