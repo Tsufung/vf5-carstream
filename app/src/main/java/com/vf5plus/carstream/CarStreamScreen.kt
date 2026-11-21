@@ -34,6 +34,7 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
     private var virtualDisplay: VirtualDisplay? = null
     private var presentation: SplitScreenPresentation? = null
     private var locationManager: LocationManager? = null
+    private var lastLocationTime: Long = 0L
 
     init {
         try {
@@ -52,37 +53,16 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
         })
     }
 
-    // ─── Template ─────────────────────────────────────────────────────────────
+    // ─── Template: Minimal ActionStrip (Only 1 Small Button: QR) ───────────────
 
     override fun onGetTemplate(): Template {
         val actionStrip = ActionStrip.Builder()
             .addAction(
                 Action.Builder()
-                    .setTitle("YouTube")
-                    .setOnClickListener {
-                        Handler(Looper.getMainLooper()).post {
-                            presentation?.switchToYoutube()
-                        }
-                    }
-                    .build()
-            )
-            .addAction(
-                Action.Builder()
-                    .setTitle("Bố cục")
+                    .setTitle("💳 QR")
                     .setOnClickListener {
                         Handler(Looper.getMainLooper()).post {
                             presentation?.toggleQr()
-                        }
-                    }
-                    .build()
-            )
-            .addAction(
-                Action.Builder()
-                    .setTitle("Tải lại")
-                    .setOnClickListener {
-                        Handler(Looper.getMainLooper()).post {
-                            presentation?.mapWebView?.reload()
-                            presentation?.mediaWebView?.reload()
                         }
                     }
                     .build()
@@ -163,7 +143,7 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
         }
     }
 
-    // ─── GPS Speed & Map Location ─────────────────────────────────────────────
+    // ─── GPS Speed & Map Location Filtering ────────────────────────────────────
 
     private fun setupLocationUpdates() {
         val hasFine = ContextCompat.checkSelfPermission(
@@ -197,9 +177,22 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
     }
 
     override fun onLocationChanged(location: Location) {
-        val rawSpeedKmh = (location.speed * 3.6f).toInt()
+        val now = System.currentTimeMillis()
+        lastLocationTime = now
+
+        val isStale = (now - location.time) > 3000
+        val isLowSpeed = location.speed < 0.8f // under ~3 km/h
+        val isPoorAccuracy = location.accuracy > 25f
+
+        // Filter speed: Force 0 if below threshold or inaccurate
+        val filteredSpeedKmh = if (isStale || isLowSpeed || isPoorAccuracy) {
+            0
+        } else {
+            (location.speed * 3.6f).toInt()
+        }
+
         Handler(Looper.getMainLooper()).post {
-            presentation?.updateSpeed(rawSpeedKmh)
+            presentation?.updateSpeed(filteredSpeedKmh)
             presentation?.updateLocation(
                 location.latitude,
                 location.longitude,
@@ -220,6 +213,7 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
             presentation?.dismiss()
             presentation = null
         } catch (_: Exception) {}
+
         try {
             virtualDisplay?.release()
             virtualDisplay = null

@@ -20,8 +20,8 @@ android {
         applicationId = "com.vf5plus.streamv2"
         minSdk = 26
         targetSdk = 34
-        versionCode = 14
-        versionName = "14.0.0"
+        versionCode = 15
+        versionName = "15.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

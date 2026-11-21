@@ -6,8 +6,13 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
 import android.view.Display
@@ -16,7 +21,10 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -25,6 +33,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
+import java.io.File
 
 class SplitScreenPresentation(
     private val themedContext: Context,
@@ -36,15 +45,11 @@ class SplitScreenPresentation(
             private set
     }
 
-    // Config values read from SharedPreferences (set by Studio)
-    var splitRatio: Int = 79
+    // Config values read from SharedPreferences
+    var splitRatio: Int = 70
     var hudX: Int = 16
     var hudY: Int = 16
-    var qrX: Int = 24
-    var qrY: Int = 90
-    var qrSize: Int = 130
     var speedOffset: Int = 0
-    var qrImageBase64: String = ""
 
     // Views
     lateinit var mapWebView: WebView
@@ -53,15 +58,19 @@ class SplitScreenPresentation(
         private set
 
     private lateinit var rootLayout: FrameLayout
+    private lateinit var mapContainer: FrameLayout
+    private lateinit var mediaContainer: LinearLayout
+    private lateinit var dividerView: View
     private lateinit var speedHudLayout: LinearLayout
     private lateinit var tvSpeedNumber: TextView
     private lateinit var qrOverlayLayout: FrameLayout
     private lateinit var btnTabYt: TextView
     private lateinit var btnTabTk: TextView
-    private lateinit var btnTabVtv: TextView
 
     private var activeMediaTab = "youtube"
     private var isQrVisible = false
+
+    private val userAgentDesktop = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
     init {
         loadConfiguration()
@@ -73,14 +82,10 @@ class SplitScreenPresentation(
         if (!raw.isNullOrEmpty()) {
             try {
                 val json = JSONObject(raw)
-                splitRatio = json.optInt("splitRatio", 79).coerceIn(20, 85)
+                splitRatio = json.optInt("splitRatio", 70).coerceIn(0, 85)
                 hudX = json.optInt("hudX", 16)
                 hudY = json.optInt("hudY", 16)
-                qrX = json.optInt("qrX", 24)
-                qrY = json.optInt("qrY", 90)
-                qrSize = json.optInt("qrSize", 130).coerceIn(80, 250)
                 speedOffset = json.optInt("speedOffset", 0)
-                qrImageBase64 = json.optString("qrImageBase64", "")
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -105,6 +110,36 @@ class SplitScreenPresentation(
         buildBottomBar()
 
         setContentView(rootLayout)
+
+        requestAudioFocus()
+    }
+
+    override fun onStop() {
+        if (activeInstance == this) {
+            activeInstance = null
+        }
+        super.onStop()
+    }
+
+    private fun requestAudioFocus() {
+        try {
+            val audioManager = themedContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(audioAttributes)
+                    .build()
+                audioManager.requestAudioFocus(focusRequest)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // ─── 1. Main Split Content ───────────────────────────────────────────────
@@ -130,13 +165,14 @@ class SplitScreenPresentation(
         }
 
         // Left Pane: Map (width by splitRatio)
-        val mapContainer = FrameLayout(themedContext).apply {
+        mapContainer = FrameLayout(themedContext).apply {
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                splitRatio.toFloat()
+                if (splitRatio > 0) splitRatio.toFloat() else 0.001f
             )
-            setBackgroundColor(Color.parseColor("#12151B"))
+            setBackgroundColor(Color.parseColor("#0D0F12"))
+            visibility = if (splitRatio > 0) View.VISIBLE else View.GONE
         }
 
         mapWebView = WebView(themedContext).apply {
@@ -149,27 +185,38 @@ class SplitScreenPresentation(
         }
         mapContainer.addView(mapWebView)
 
-        // Split Divider line
-        val dividerView = View(themedContext).apply {
+        // Split Divider line (Draggable to resize)
+        dividerView = View(themedContext).apply {
             layoutParams = LinearLayout.LayoutParams(
-                dp(3),
+                dp(6),
                 LinearLayout.LayoutParams.MATCH_PARENT
             )
             setBackgroundColor(Color.parseColor("#C86A3E"))
+            visibility = if (splitRatio > 0) View.VISIBLE else View.GONE
+            setOnTouchListener { _, event ->
+                if (event.action == MotionEvent.ACTION_MOVE) {
+                    val totalWidth = rootLayout.width
+                    if (totalWidth > 0) {
+                        val ratio = ((event.rawX / totalWidth) * 100).toInt().coerceIn(20, 80)
+                        setSplitRatio(ratio)
+                    }
+                }
+                true
+            }
         }
 
-        // Right Pane: Media (YouTube, TikTok, VTV)
-        val mediaContainer = LinearLayout(themedContext).apply {
+        // Right Pane: Media (YouTube, TikTok)
+        mediaContainer = LinearLayout(themedContext).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (100 - splitRatio).toFloat()
+                if (splitRatio > 0) (100 - splitRatio).toFloat() else 100f
             )
             setBackgroundColor(Color.parseColor("#0A0C0E"))
         }
 
-        // Quick Tabs
+        // Quick Tabs: YouTube & TikTok ONLY (No VTV)
         val tabRow = LinearLayout(themedContext).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -181,11 +228,9 @@ class SplitScreenPresentation(
 
         btnTabYt = createTabButton("▶ YouTube", true) { selectTab("youtube") }
         btnTabTk = createTabButton("♪ TikTok", false) { selectTab("tiktok") }
-        btnTabVtv = createTabButton("📺 VTV", false) { selectTab("vtvgo") }
 
         tabRow.addView(btnTabYt)
         tabRow.addView(btnTabTk)
-        tabRow.addView(btnTabVtv)
 
         mediaWebView = WebView(themedContext).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -217,7 +262,7 @@ class SplitScreenPresentation(
             )
             gravity = Gravity.CENTER
             this.text = text
-            textSize = 11f
+            textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
             if (isSelected) {
                 setBackgroundColor(Color.parseColor("#C86A3E"))
@@ -230,7 +275,7 @@ class SplitScreenPresentation(
         }
     }
 
-    private fun selectTab(tab: String) {
+    fun selectTab(tab: String) {
         activeMediaTab = tab
         val activeBg = Color.parseColor("#C86A3E")
         val inactiveBg = Color.parseColor("#16181F")
@@ -243,13 +288,45 @@ class SplitScreenPresentation(
         btnTabTk.setBackgroundColor(if (tab == "tiktok") activeBg else inactiveBg)
         btnTabTk.setTextColor(if (tab == "tiktok") activeText else inactiveText)
 
-        btnTabVtv.setBackgroundColor(if (tab == "vtvgo") activeBg else inactiveBg)
-        btnTabVtv.setTextColor(if (tab == "vtvgo") activeText else inactiveText)
+        requestAudioFocus()
 
-        when (tab) {
-            "youtube" -> mediaWebView.loadUrl("https://m.youtube.com")
-            "tiktok" -> mediaWebView.loadUrl("https://www.tiktok.com")
-            "vtvgo" -> mediaWebView.loadUrl("https://vtvgo.vn")
+        if (tab == "youtube") {
+            mediaWebView.settings.userAgentString = null // default mobile agent
+            mediaWebView.loadUrl("https://m.youtube.com")
+        } else {
+            mediaWebView.settings.userAgentString = userAgentDesktop
+            mediaWebView.loadUrl("https://www.tiktok.com/explore")
+        }
+    }
+
+    fun setSplitRatio(ratio: Int) {
+        splitRatio = ratio
+        Handler(Looper.getMainLooper()).post {
+            if (ratio <= 0) {
+                mapContainer.visibility = View.GONE
+                dividerView.visibility = View.GONE
+                val mediaParams = mediaContainer.layoutParams as LinearLayout.LayoutParams
+                mediaParams.weight = 100f
+                mediaContainer.layoutParams = mediaParams
+            } else {
+                mapContainer.visibility = View.VISIBLE
+                dividerView.visibility = View.VISIBLE
+
+                val mapParams = mapContainer.layoutParams as LinearLayout.LayoutParams
+                mapParams.weight = ratio.toFloat()
+                mapContainer.layoutParams = mapParams
+
+                val mediaParams = mediaContainer.layoutParams as LinearLayout.LayoutParams
+                mediaParams.weight = (100 - ratio).toFloat()
+                mediaContainer.layoutParams = mediaParams
+            }
+
+            // Save ratio
+            val prefs = themedContext.getSharedPreferences("vf5_layout_prefs", Context.MODE_PRIVATE)
+            val raw = prefs.getString("layout_config", "")
+            val json = if (raw.isNullOrEmpty()) JSONObject() else JSONObject(raw)
+            json.put("splitRatio", ratio)
+            prefs.edit().putString("layout_config", json.toString()).apply()
         }
     }
 
@@ -308,51 +385,86 @@ class SplitScreenPresentation(
         rootLayout.addView(speedHudLayout)
     }
 
-    // ─── 3. QR Code Overlay ──────────────────────────────────────────────────
+    // ─── 3. Large Centered Payment QR Overlay ────────────────────────────────
 
     private fun buildQrOverlay() {
         val qrBg = GradientDrawable().apply {
-            setColor(Color.WHITE)
-            cornerRadius = dp(14).toFloat()
+            setColor(Color.parseColor("#F50D1117"))
+            cornerRadius = dp(18).toFloat()
             setStroke(dp(3), Color.parseColor("#C86A3E"))
         }
 
         qrOverlayLayout = FrameLayout(themedContext).apply {
             background = qrBg
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setPadding(dp(16), dp(16), dp(16), dp(16))
             visibility = View.GONE
             layoutParams = FrameLayout.LayoutParams(
-                dp(qrSize),
-                dp(qrSize)
+                dp(280),
+                dp(280)
             ).apply {
-                leftMargin = dp(qrX)
-                topMargin = dp(qrY)
+                gravity = Gravity.CENTER
             }
+            setOnClickListener { toggleQr() }
         }
 
-        val qrImageView = ImageView(themedContext).apply {
+        val container = LinearLayout(themedContext).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+        }
+
+        val qrImageView = ImageView(themedContext).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                0,
+                1.0f
+            ).apply {
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+            }
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
 
-        if (qrImageBase64.isNotEmpty()) {
-            try {
-                val clean = qrImageBase64.substringAfter("base64,")
-                val bytes = Base64.decode(clean, Base64.DEFAULT)
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                qrImageView.setImageBitmap(bitmap)
-            } catch (e: Exception) {
-                qrImageView.setBackgroundColor(Color.LTGRAY)
+        // Load permanent file payment_qr.png first
+        loadQrBitmap(qrImageView)
+
+        val btnClose = TextView(themedContext).apply {
+            text = "✕ Đóng Mã QR"
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(dp(14), dp(6), dp(14), dp(6))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#DC2626"))
+                cornerRadius = dp(8).toFloat()
             }
-        } else {
-            qrImageView.setBackgroundColor(Color.LTGRAY)
+            setOnClickListener { toggleQr() }
         }
 
-        qrOverlayLayout.addView(qrImageView)
+        container.addView(qrImageView)
+        container.addView(btnClose)
+
+        qrOverlayLayout.addView(container)
         rootLayout.addView(qrOverlayLayout)
+    }
+
+    private fun loadQrBitmap(imageView: ImageView) {
+        val qrFile = File(themedContext.filesDir, "payment_qr.png")
+        if (qrFile.exists()) {
+            try {
+                val bmp = BitmapFactory.decodeFile(qrFile.absolutePath)
+                if (bmp != null) {
+                    imageView.setImageBitmap(bmp)
+                    return
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        imageView.setBackgroundColor(Color.DKGRAY)
     }
 
     fun toggleQr() {
@@ -376,16 +488,15 @@ class SplitScreenPresentation(
             }
         }
 
-        // Left buttons
-        val btnHome = createBottomButton("🏠 Trang chủ", Color.parseColor("#20242E"), Color.WHITE) {
-            mapWebView.loadUrl("file:///android_asset/map.html")
-            mediaWebView.loadUrl("https://m.youtube.com")
-        }
-        val btnQr = createBottomButton("💳 Mã QR Thu Tiền", Color.parseColor("#C86A3E"), Color.WHITE) {
-            toggleQr()
-        }
+        // Ratio buttons
+        val btn70 = createBottomButton("70/30", Color.parseColor("#20242E"), Color.WHITE) { setSplitRatio(70) }
+        val btn50 = createBottomButton("50/50", Color.parseColor("#20242E"), Color.WHITE) { setSplitRatio(50) }
+        val btnFull = createBottomButton("Full Video", Color.parseColor("#20242E"), Color.parseColor("#38BDF8")) { setSplitRatio(0) }
+        val btnQr = createBottomButton("💳 Mã QR", Color.parseColor("#C86A3E"), Color.WHITE) { toggleQr() }
 
-        barLayout.addView(btnHome)
+        barLayout.addView(btn70)
+        barLayout.addView(btn50)
+        barLayout.addView(btnFull)
         barLayout.addView(btnQr)
 
         // Spacer
@@ -394,7 +505,7 @@ class SplitScreenPresentation(
         }
         barLayout.addView(spacer)
 
-        // Media controls (Steering wheel simulation)
+        // Media controls (Next / Play / Prev)
         val mediaControlGroup = LinearLayout(themedContext).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -405,9 +516,9 @@ class SplitScreenPresentation(
             }
         }
 
-        val btnPrev = createMediaButton("⏮") { triggerMediaKey(KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
-        val btnPlay = createMediaButton("⏯") { triggerMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) }
-        val btnNext = createMediaButton("⏭") { triggerMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT) }
+        val btnPrev = createMediaButton("⏮") { handlePrevTrack() }
+        val btnPlay = createMediaButton("⏯") { handlePlayPause() }
+        val btnNext = createMediaButton("⏭") { handleNextTrack() }
 
         mediaControlGroup.addView(btnPrev)
         mediaControlGroup.addView(btnPlay)
@@ -431,16 +542,16 @@ class SplitScreenPresentation(
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(textColor)
             gravity = Gravity.CENTER
-            setPadding(dp(10), dp(5), dp(10), dp(5))
+            setPadding(dp(8), dp(4), dp(8), dp(4))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                rightMargin = dp(6)
+                rightMargin = dp(4)
             }
             background = GradientDrawable().apply {
                 setColor(bgColor)
-                cornerRadius = dp(8).toFloat()
+                cornerRadius = dp(6).toFloat()
             }
             setOnClickListener { onClick() }
         }
@@ -458,78 +569,83 @@ class SplitScreenPresentation(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                leftMargin = dp(2)
                 rightMargin = dp(2)
             }
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#1E222B"))
+                setColor(Color.parseColor("#1B1F2A"))
                 cornerRadius = dp(6).toFloat()
             }
             setOnClickListener { onClick() }
         }
     }
 
-    override fun onStop() {
-        if (activeInstance == this) {
-            activeInstance = null
-        }
-        super.onStop()
-    }
+    // ─── 5. Steering Wheel Controls Callback ─────────────────────────────────
 
-    fun switchToYoutube() {
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            selectTab("youtube")
-        }
-    }
-
-    fun switchToTikTok() {
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            selectTab("tiktok")
-        }
-    }
-
-    fun switchToVtv() {
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            selectTab("vtvgo")
-        }
-    }
-
-    fun triggerMediaKey(keyCode: Int) {
-        val audioManager = themedContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-        val eventDown = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
-        val eventUp = KeyEvent(KeyEvent.ACTION_UP, keyCode)
-        audioManager?.dispatchMediaKeyEvent(eventDown)
-        audioManager?.dispatchMediaKeyEvent(eventUp)
-
-        // Web video helpers
-        when (keyCode) {
-            KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                if (activeMediaTab == "tiktok") {
-                    mediaWebView.evaluateJavascript("window.scrollBy({top: window.innerHeight, behavior: 'smooth'});", null)
-                } else {
-                    mediaWebView.evaluateJavascript("document.querySelector('.ytp-next-button')?.click();", null)
-                }
-            }
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                if (activeMediaTab == "tiktok") {
-                    mediaWebView.evaluateJavascript("window.scrollBy({top: -window.innerHeight, behavior: 'smooth'});", null)
-                } else {
-                    mediaWebView.evaluateJavascript("document.querySelector('.ytp-prev-button')?.click();", null)
-                }
-            }
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+    fun handleNextTrack() {
+        Handler(Looper.getMainLooper()).post {
+            if (activeMediaTab == "tiktok") {
+                mediaWebView.evaluateJavascript("window.scrollBy({top: window.innerHeight, behavior: 'smooth'});", null)
+            } else {
                 mediaWebView.evaluateJavascript(
-                    "var v = document.querySelector('video'); if (v) { v.paused ? v.play() : v.pause(); }",
+                    "var btn = document.querySelector('.ytp-next-button') || document.querySelector('button[aria-label*=\"Tiếp theo\"]') || document.querySelector('button[aria-label*=\"Next\"]'); if (btn) { btn.click(); } else { window.history.forward(); }",
                     null
                 )
             }
         }
     }
 
-    // ─── GPS & Speed Updates ─────────────────────────────────────────────────
+    fun handlePrevTrack() {
+        Handler(Looper.getMainLooper()).post {
+            if (activeMediaTab == "tiktok") {
+                mediaWebView.evaluateJavascript("window.scrollBy({top: -window.innerHeight, behavior: 'smooth'});", null)
+            } else {
+                mediaWebView.evaluateJavascript("window.history.back();", null)
+            }
+        }
+    }
 
-    fun updateSpeed(rawKmh: Int) {
-        val adjusted = (rawKmh * (1.0 + speedOffset / 100.0)).toInt().coerceAtLeast(0)
+    fun handlePlayPause() {
+        Handler(Looper.getMainLooper()).post {
+            mediaWebView.evaluateJavascript(
+                "var v = document.querySelector('video'); if (v) { v.paused ? v.play() : v.pause(); }",
+                null
+            )
+        }
+    }
+
+    fun switchToYoutube() {
+        Handler(Looper.getMainLooper()).post {
+            selectTab("youtube")
+        }
+    }
+
+    fun switchToTikTok() {
+        Handler(Looper.getMainLooper()).post {
+            selectTab("tiktok")
+        }
+    }
+
+    // ─── 6. Navigation Turn Guidance & OSRM Route ─────────────────────────────
+
+    fun updateTurnBanner(icon: String, distance: String, road: String) {
+        Handler(Looper.getMainLooper()).post {
+            val safeIcon = icon.replace("'", "\\'")
+            val safeDist = distance.replace("'", "\\'")
+            val safeRoad = road.replace("'", "\\'")
+            mapWebView.evaluateJavascript("setTurnGuidance('$safeIcon', '$safeDist', '$safeRoad');", null)
+        }
+    }
+
+    fun drawRoute(geoJsonStr: String) {
+        Handler(Looper.getMainLooper()).post {
+            mapWebView.evaluateJavascript("drawRouteGeoJson($geoJsonStr);", null)
+        }
+    }
+
+    // ─── 7. GPS & Speed Updates ──────────────────────────────────────────────
+
+    fun updateSpeed(filteredKmh: Int) {
+        val adjusted = (filteredKmh * (1.0 + speedOffset / 100.0)).toInt().coerceAtLeast(0)
         tvSpeedNumber.text = "$adjusted"
     }
 
@@ -537,7 +653,7 @@ class SplitScreenPresentation(
         mapWebView.evaluateJavascript("updateLocation($lat, $lng, $accuracy, $speed)", null)
     }
 
-    // ─── Touch Event Forwarding ──────────────────────────────────────────────
+    // ─── 8. Touch Event Forwarding ───────────────────────────────────────────
 
     fun dispatchClick(x: Float, y: Float) {
         val downTime = SystemClock.uptimeMillis()
@@ -555,7 +671,7 @@ class SplitScreenPresentation(
         mapWebView.scrollBy(distanceX.toInt(), distanceY.toInt())
     }
 
-    // ─── Utility ─────────────────────────────────────────────────────────────
+    // ─── 9. WebView Setup ────────────────────────────────────────────────────
 
     private fun setupWebViewSettings(wv: WebView) {
         wv.settings.apply {
@@ -568,8 +684,28 @@ class SplitScreenPresentation(
             useWideViewPort = true
             loadWithOverviewMode = true
         }
-        wv.webViewClient = WebViewClient()
-        wv.webChromeClient = WebChromeClient()
+
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setAcceptThirdPartyCookies(wv, true)
+        }
+
+        wv.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url?.toString() ?: return false
+                if (url.startsWith("http://") || url.startsWith("https://")) {
+                    return false // Let WebView load it
+                }
+                // Block intent://, market://, snssdk:// to prevent net::ERR_UNKNOWN_URL_SCHEME
+                return true
+            }
+        }
+
+        wv.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                request?.grant(request.resources) // Automatically grant mic permission for voice search
+            }
+        }
     }
 
     private fun dp(value: Int): Int {
