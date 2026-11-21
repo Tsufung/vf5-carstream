@@ -18,6 +18,8 @@ import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 
 class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallback {
 
@@ -48,6 +50,13 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
             Log.e(TAG, "setSurfaceCallback failed: ${e.message}")
         }
         setupMediaSession()
+
+        lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onDestroy(owner: LifecycleOwner) {
+                mediaSession?.release()
+                mediaSession = null
+            }
+        })
     }
 
     // ── 2. Build NavigationTemplate (required for Surface to be granted) ──────
@@ -217,11 +226,6 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
                 Log.e(TAG, "Cannot open Maps: ${ex.message}")
             }
         }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        mediaSession?.release()
     }
 
     fun loadUrl(url: String) {
