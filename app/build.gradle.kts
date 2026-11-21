@@ -20,8 +20,8 @@ android {
         applicationId = "com.vf5plus.carstream"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "9.0.0"
+        versionCode = 10
+        versionName = "10.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

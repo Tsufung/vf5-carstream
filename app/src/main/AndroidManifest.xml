@@ -5,42 +5,23 @@
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES" />
-
-    <!-- Queries for Google Maps & Navigation -->
-    <queries>
-        <package android:name="com.google.android.apps.maps" />
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="geo" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="google.navigation" />
-        </intent>
-    </queries>
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="VF5 Stream"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
         android:theme="@style/Theme.VF5CarStream">
 
-        <!-- Main Launcher Activity on phone -->
+        <!-- Main Launcher Activity on Phone (Loads Studio Drag-and-Drop Webview) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -52,43 +33,16 @@
             </intent-filter>
         </activity>
 
-        <!-- Automotive Activity for Car Launcher -->
-        <activity
-            android:name="androidx.car.app.activity.CarAppActivity"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:label="@string/app_name"
-            android:icon="@mipmap/ic_launcher"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <!-- Android Auto CarAppService — Navigation -->
+        <!-- DUY NHẤT 1 Service cho Android Auto -->
         <service
             android:name=".VF5CarStreamService"
-            android:label="@string/app_name"
+            android:label="VF5 Stream"
             android:icon="@mipmap/ic_launcher"
             android:exported="true"
             android:foregroundServiceType="connectedDevice|location">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
                 <category android:name="androidx.car.app.category.NAVIGATION" />
-            </intent-filter>
-        </service>
-
-        <!-- Android Auto Media Service (shows as Media/Control in Launcher) -->
-        <service
-            android:name=".VF5MediaService"
-            android:label="VF5 Control"
-            android:icon="@mipmap/ic_launcher"
-            android:exported="true"
-            android:foregroundServiceType="mediaPlayback">
-            <intent-filter>
-                <action android:name="android.media.browse.MediaBrowserService" />
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </service>
 

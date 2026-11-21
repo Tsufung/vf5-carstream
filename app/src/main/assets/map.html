@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body, #map {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      background: #0d0f12;
+      overflow: hidden;
+    }
+    .leaflet-control-attribution {
+      display: none !important;
+    }
+    .car-marker {
+      width: 24px;
+      height: 24px;
+      background: #0284c7;
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 14px rgba(2, 132, 199, 0.9);
+      transition: all 0.3s ease-out;
+    }
+    .turn-banner {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 1000;
+      background: rgba(11, 19, 43, 0.92);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 14px;
+      padding: 10px 14px;
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .speed-badge {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      z-index: 1000;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: white;
+      border: 4px solid #dc2626;
+      color: black;
+      font-weight: 900;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Route banner -->
+  <div class="turn-banner">
+    <div style="font-size: 22px; color: #38bdf8; font-weight: 900;">↱</div>
+    <div>
+      <div style="font-size: 11px; color: #7dd3fc; font-weight: 700;">Sau 250m nữa</div>
+      <div id="roadName" style="font-size: 13px; font-weight: 800;">Rẽ phải vào Nguyễn Huệ</div>
+    </div>
+  </div>
+
+  <div class="speed-badge">60</div>
+
+  <script>
+    // Initialize map
+    var map = L.map('map', {
+      zoomControl: false,
+      attributionControl: false
+    }).setView([10.7769, 106.7009], 16);
+
+    // CartoDB Dark Matter tiles
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      subdomains: 'abcd'
+    }).addTo(map);
+
+    // Custom car icon
+    var carIcon = L.divIcon({
+      className: 'car-marker',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+
+    var carMarker = L.marker([10.7769, 106.7009], { icon: carIcon }).addTo(map);
+
+    // Accuracy circle
+    var accCircle = L.circle([10.7769, 106.7009], {
+      radius: 20,
+      color: '#0284c7',
+      fillColor: '#38bdf8',
+      fillOpacity: 0.15,
+      weight: 1
+    }).addTo(map);
+
+    // Called from Android GPS updates
+    function updateLocation(lat, lng, accuracy, speed) {
+      if (!lat || !lng) return;
+      var newPos = [lat, lng];
+      carMarker.setLatLng(newPos);
+      accCircle.setLatLng(newPos);
+      if (accuracy) accCircle.setRadius(accuracy);
+      map.panTo(newPos, { animate: true, duration: 0.8 });
+    }
+
+    function setRoadInfo(direction, road) {
+      if (road) document.getElementById('roadName').textContent = road;
+    }
+  </script>
+</body>
+</html>
