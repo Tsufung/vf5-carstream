@@ -23,9 +23,10 @@ app/build/
 *.war
 *.ear
 
-# Github Actions secrets (never commit)
+# Keystore for continuous auto-updates
 *.keystore
 *.jks
+!app/keystore.jks
 signing.properties
 
 # IDE

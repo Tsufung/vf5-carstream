@@ -7,19 +7,32 @@ android {
     namespace = "com.vf5plus.carstream"
     compileSdk = 35
 
+    signingConfigs {
+        create("fixedSign") {
+            storeFile = file("keystore.jks")
+            storePassword = "vf5plus2025"
+            keyAlias = "vf5key"
+            keyPassword = "vf5plus2025"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.vf5plus.carstream"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "8.0.0"
+        versionCode = 9
+        versionName = "9.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("fixedSign")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("fixedSign")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
