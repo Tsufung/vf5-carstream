@@ -56,24 +56,33 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
 
     override fun onGetTemplate(): Template {
         val actionStrip = ActionStrip.Builder()
-            .addAction(Action.PAN)
             .addAction(
                 Action.Builder()
-                    .setTitle("🏠 Trang chủ")
+                    .setTitle("YouTube")
                     .setOnClickListener {
                         Handler(Looper.getMainLooper()).post {
-                            presentation?.mapWebView?.loadUrl("file:///android_asset/map.html")
-                            presentation?.mediaWebView?.loadUrl("https://m.youtube.com")
+                            presentation?.switchToYoutube()
                         }
                     }
                     .build()
             )
             .addAction(
                 Action.Builder()
-                    .setTitle("💳 Mã QR")
+                    .setTitle("Bố cục")
                     .setOnClickListener {
                         Handler(Looper.getMainLooper()).post {
                             presentation?.toggleQr()
+                        }
+                    }
+                    .build()
+            )
+            .addAction(
+                Action.Builder()
+                    .setTitle("Tải lại")
+                    .setOnClickListener {
+                        Handler(Looper.getMainLooper()).post {
+                            presentation?.mapWebView?.reload()
+                            presentation?.mediaWebView?.reload()
                         }
                     }
                     .build()
@@ -82,9 +91,6 @@ class CarStreamScreen(carContext: CarContext) : Screen(carContext), SurfaceCallb
 
         return NavigationTemplate.Builder()
             .setActionStrip(actionStrip)
-            .setPanModeListener { isInPanMode ->
-                Log.d(TAG, "PanMode: $isInPanMode")
-            }
             .build()
     }
 
