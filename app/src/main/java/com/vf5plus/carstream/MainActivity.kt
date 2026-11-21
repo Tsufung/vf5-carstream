@@ -74,9 +74,8 @@ class MainActivity : AppCompatActivity() {
 
         setupRatioButtons()
         setupThemeButtons()
-        setupToolbarButtons()
         setupImages()
-        setupSpeedHud()
+        setupVietmapAndSpeedHud()
         setupCallSettings()
         setupAppToggles()
         setupClearCache()
@@ -171,53 +170,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ─── 3. Toolbar buttons ───────────────────────────────────────────────────
-
-    private fun setupToolbarButtons() {
-        updateToolbarUi(config.toolbarMode)
-
-        binding.btnToolbarFixed.setOnClickListener {
-            config.toolbarMode = VF5Config.TOOLBAR_FIXED
-            updateToolbarUi(VF5Config.TOOLBAR_FIXED)
-        }
-        binding.btnToolbarFloating.setOnClickListener {
-            config.toolbarMode = VF5Config.TOOLBAR_FLOATING
-            updateToolbarUi(VF5Config.TOOLBAR_FLOATING)
-        }
-        binding.btnToolbarAutoHide.setOnClickListener {
-            config.toolbarMode = VF5Config.TOOLBAR_AUTO_HIDE
-            updateToolbarUi(VF5Config.TOOLBAR_AUTO_HIDE)
-        }
-    }
-
-    private fun updateToolbarUi(selectedMode: String) {
-        val activeColor = ContextCompat.getColor(this, R.color.colorAccentWarm)
-        val inactiveColor = ContextCompat.getColor(this, R.color.pillInactive)
-        val activeTextColor = Color.WHITE
-        val inactiveTextColor = ContextCompat.getColor(this, R.color.pillInactiveText)
-
-        val buttons = mapOf(
-            VF5Config.TOOLBAR_FIXED to binding.btnToolbarFixed,
-            VF5Config.TOOLBAR_FLOATING to binding.btnToolbarFloating,
-            VF5Config.TOOLBAR_AUTO_HIDE to binding.btnToolbarAutoHide
-        )
-
-        buttons.forEach { (mode, btn) ->
-            if (mode == selectedMode) {
-                btn.setBackgroundColor(activeColor)
-                btn.setTextColor(activeTextColor)
-            } else {
-                btn.setBackgroundColor(inactiveColor)
-                btn.setTextColor(inactiveTextColor)
-            }
-        }
-    }
-
-    // ─── 4. Images (QR & Car) ─────────────────────────────────────────────────
+    // ─── 3. Images (QR & Car) ─────────────────────────────────────────────────
 
     private fun setupImages() {
         updateQrPreview()
-        updateCarPreview()
 
         binding.btnPickQr.setOnClickListener {
             pickQrLauncher.launch("image/*")
@@ -226,15 +182,6 @@ class MainActivity : AppCompatActivity() {
             config.deleteQrImage()
             updateQrPreview()
             Toast.makeText(this, "Đã xóa ảnh QR", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.btnPickCar.setOnClickListener {
-            pickCarLauncher.launch("image/*")
-        }
-        binding.btnResetCar.setOnClickListener {
-            config.deleteCarImage()
-            updateCarPreview()
-            Toast.makeText(this, "Đã xóa ảnh xe", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -248,23 +195,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateCarPreview() {
-        val bitmap = config.getCarBitmap()
-        if (bitmap != null) {
-            binding.ivCarPreview.setImageBitmap(bitmap)
-        } else {
-            binding.ivCarPreview.setImageDrawable(null)
-            binding.ivCarPreview.setBackgroundColor(ContextCompat.getColor(this, R.color.pillInactive))
+    // ─── 4. VietMap Live & Speed HUD ──────────────────────────────────────────
+
+    private fun setupVietmapAndSpeedHud() {
+        // Âm thanh cảnh báo VietMap Live
+        binding.switchVietmapAudio.isChecked = config.isVietmapAudioEnabled
+        binding.switchVietmapAudio.setOnCheckedChangeListener { _, isChecked ->
+            config.isVietmapAudioEnabled = isChecked
+            val msg = if (isChecked) "Đã bật tiếng cảnh báo VietMap Live" else "Đã tắt tiếng cảnh báo VietMap Live"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
-    }
 
-    // ─── 5. Speed HUD ─────────────────────────────────────────────────────────
-
-    private fun setupSpeedHud() {
+        // Tốc độ GPS
         binding.switchSpeedHud.isChecked = config.isSpeedHudEnabled
         binding.switchSpeedHud.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                // Kiểm tra quyền GPS
                 val hasFine = ContextCompat.checkSelfPermission(
                     this, Manifest.permission.ACCESS_FINE_LOCATION
                 ) == PackageManager.PERMISSION_GRANTED
@@ -284,7 +229,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // SeekBar bù tốc độ: 0 -> 20 tương ứng -10% -> +10%
         val currentOffset = config.speedOffsetPercent
         binding.seekBarSpeedOffset.progress = currentOffset + 10
         updateSpeedOffsetText(currentOffset)
@@ -305,21 +249,16 @@ class MainActivity : AppCompatActivity() {
         binding.tvSpeedOffset.text = "Bù tốc độ theo đồng hồ xe: $sign"
     }
 
-    // ─── 6. Call settings ─────────────────────────────────────────────────────
+    // ─── 5. Call settings ─────────────────────────────────────────────────────
 
     private fun setupCallSettings() {
         binding.switchCallAutoPause.isChecked = config.isCallAutoPauseEnabled
         binding.switchCallAutoPause.setOnCheckedChangeListener { _, isChecked ->
             config.isCallAutoPauseEnabled = isChecked
         }
-
-        binding.switchCallRingtone.isChecked = config.isCallRingtonePhone
-        binding.switchCallRingtone.setOnCheckedChangeListener { _, isChecked ->
-            config.isCallRingtonePhone = isChecked
-        }
     }
 
-    // ─── 7. App toggles ───────────────────────────────────────────────────────
+    // ─── 6. App toggles: Chỉ YouTube & TikTok ─────────────────────────────────
 
     private fun setupAppToggles() {
         binding.switchAppYouTube.isChecked = config.isYouTubeEnabled
@@ -331,19 +270,9 @@ class MainActivity : AppCompatActivity() {
         binding.switchAppTikTok.setOnCheckedChangeListener { _, isChecked ->
             config.isTikTokEnabled = isChecked
         }
-
-        binding.switchAppVtvGo.isChecked = config.isVtvGoEnabled
-        binding.switchAppVtvGo.setOnCheckedChangeListener { _, isChecked ->
-            config.isVtvGoEnabled = isChecked
-        }
-
-        binding.switchAppFptPlay.isChecked = config.isFptPlayEnabled
-        binding.switchAppFptPlay.setOnCheckedChangeListener { _, isChecked ->
-            config.isFptPlayEnabled = isChecked
-        }
     }
 
-    // ─── 8. Clear cache ───────────────────────────────────────────────────────
+    // ─── 7. Clear cache ───────────────────────────────────────────────────────
 
     private fun setupClearCache() {
         binding.btnClearCache.setOnClickListener {

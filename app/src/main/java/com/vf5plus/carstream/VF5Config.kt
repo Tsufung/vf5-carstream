@@ -50,6 +50,15 @@ class VF5Config(private val context: Context) {
         get() = prefs.getString("toolbar_mode", TOOLBAR_FIXED) ?: TOOLBAR_FIXED
         set(value) = prefs.edit().putString("toolbar_mode", value).apply()
 
+    // VietMap Live & Speed
+    var isVietmapEnabled: Boolean
+        get() = prefs.getBoolean("vietmap_enabled", true)
+        set(value) = prefs.edit().putBoolean("vietmap_enabled", value).apply()
+
+    var isVietmapAudioEnabled: Boolean
+        get() = prefs.getBoolean("vietmap_audio_enabled", true)
+        set(value) = prefs.edit().putBoolean("vietmap_audio_enabled", value).apply()
+
     var isSpeedHudEnabled: Boolean
         get() = prefs.getBoolean("speed_hud_enabled", true)
         set(value) = prefs.edit().putBoolean("speed_hud_enabled", value).apply()
@@ -66,7 +75,7 @@ class VF5Config(private val context: Context) {
         get() = prefs.getBoolean("call_ringtone_phone", true)
         set(value) = prefs.edit().putBoolean("call_ringtone_phone", value).apply()
 
-    // Apps selection
+    // Apps: Chỉ giữ YouTube & TikTok (Đã chặn QC)
     var isYouTubeEnabled: Boolean
         get() = prefs.getBoolean("app_youtube_enabled", true)
         set(value) = prefs.edit().putBoolean("app_youtube_enabled", value).apply()
@@ -75,13 +84,22 @@ class VF5Config(private val context: Context) {
         get() = prefs.getBoolean("app_tiktok_enabled", true)
         set(value) = prefs.edit().putBoolean("app_tiktok_enabled", value).apply()
 
-    var isVtvGoEnabled: Boolean
-        get() = prefs.getBoolean("app_vtvgo_enabled", true)
-        set(value) = prefs.edit().putBoolean("app_vtvgo_enabled", value).apply()
+    // Tọa độ kéo thả đã lưu
+    var speedWidgetX: Float
+        get() = prefs.getFloat("speed_widget_x", 16f)
+        set(value) = prefs.edit().putFloat("speed_widget_x", value).apply()
 
-    var isFptPlayEnabled: Boolean
-        get() = prefs.getBoolean("app_fptplay_enabled", false)
-        set(value) = prefs.edit().putBoolean("app_fptplay_enabled", value).apply()
+    var speedWidgetY: Float
+        get() = prefs.getFloat("speed_widget_y", 16f)
+        set(value) = prefs.edit().putFloat("speed_widget_y", value).apply()
+
+    var mapInfoX: Float
+        get() = prefs.getFloat("map_info_x", 16f)
+        set(value) = prefs.edit().putFloat("map_info_x", 16f).apply()
+
+    var mapInfoY: Float
+        get() = prefs.getFloat("map_info_y", 70f)
+        set(value) = prefs.edit().putFloat("map_info_y", value).apply()
 
     // ─── Image management ─────────────────────────────────────────────────────
 

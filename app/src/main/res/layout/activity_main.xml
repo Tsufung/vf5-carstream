@@ -23,7 +23,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="VF5 CarStream"
+                android:text="VF5 CarStream v6.0"
                 android:textColor="@color/textPrimary"
                 android:textSize="24sp"
                 android:textStyle="bold" />
@@ -32,7 +32,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="Tùy biến giao diện cho xe VinFast VF5 Plus 2025"
+                android:text="Tùy biến màn hình xe VinFast VF5 Plus 2025"
                 android:textColor="@color/textSecondary"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -51,7 +51,7 @@
             android:paddingEnd="16dp"
             android:paddingBottom="40dp">
 
-            <!-- 1. GIAO DIỆN MÀN XE -->
+            <!-- 1. BỐ CỤC MÀN XE -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -85,7 +85,6 @@
                         android:textColor="@color/textSecondary"
                         android:textSize="12sp" />
 
-                    <!-- Ratio buttons -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -149,7 +148,6 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- Sáng/Tối -->
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -197,56 +195,6 @@
                             android:textSize="10sp"
                             app:cornerRadius="10dp" />
                     </LinearLayout>
-
-                    <!-- Thanh công cụ -->
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:layout_marginBottom="8dp"
-                        android:text="Thanh công cụ trên màn xe"
-                        android:textColor="@color/textPrimary"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <Button
-                            android:id="@+id/btnToolbarFixed"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="0dp"
-                            android:layout_height="42dp"
-                            android:layout_marginEnd="4dp"
-                            android:layout_weight="1"
-                            android:text="Cố định"
-                            android:textSize="11sp"
-                            app:cornerRadius="10dp" />
-
-                        <Button
-                            android:id="@+id/btnToolbarFloating"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="0dp"
-                            android:layout_height="42dp"
-                            android:layout_marginEnd="4dp"
-                            android:layout_weight="1"
-                            android:text="Nổi"
-                            android:textSize="11sp"
-                            app:cornerRadius="10dp" />
-
-                        <Button
-                            android:id="@+id/btnToolbarAutoHide"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="0dp"
-                            android:layout_height="42dp"
-                            android:layout_weight="1"
-                            android:text="Tự động ẩn"
-                            android:textSize="11sp"
-                            app:cornerRadius="10dp" />
-                    </LinearLayout>
-
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -280,7 +228,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:layout_marginBottom="12dp"
-                        android:text="Khi khách đi xe cần chuyển khoản, bấm nút 'Mã QR' trên màn hình xe để khách quét trả tiền ngay tức thì."
+                        android:text="Khách cần chuyển khoản, bấm nút 'Mã QR' trên màn hình xe để khách quét trả tiền ngay tức thì."
                         android:textColor="@color/textSecondary"
                         android:textSize="12sp" />
 
@@ -329,7 +277,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 3. ẢNH XE VINFAST VF5 -->
+            <!-- 3. CẢNH BÁO TỐC ĐỘ VIETMAP LIVE & HUD GPS -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -349,7 +297,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🚗 Ảnh xe của bạn (VF5 Plus)"
+                        android:text="🧭 Cảnh báo tốc độ VietMap Live"
                         android:textColor="@color/textPrimary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
@@ -358,76 +306,15 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:layout_marginBottom="12dp"
-                        android:text="Ảnh xe cá nhân hiển thị trên trang chủ màn hình ô tô"
+                        android:text="Hiển thị biển báo giới hạn tốc độ, camera phạt nguội và tốc độ GPS thời gian thực (Kéo thả tự do trên màn hình xe)"
                         android:textColor="@color/textSecondary"
                         android:textSize="12sp" />
 
+                    <!-- Âm thanh Vietmap Live -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/ivCarPreview"
-                            android:layout_width="90dp"
-                            android:layout_height="90dp"
-                            android:background="@color/pillInactive"
-                            android:contentDescription="Ảnh xe"
-                            android:scaleType="centerCrop" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="14dp"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <Button
-                                android:id="@+id/btnPickCar"
-                                android:layout_width="match_parent"
-                                android:layout_height="44dp"
-                                android:backgroundTint="@color/colorAccentWarm"
-                                android:text="🚘 Chọn ảnh xe"
-                                android:textColor="#FFFFFF"
-                                android:textSize="12sp"
-                                app:cornerRadius="10dp" />
-
-                            <Button
-                                android:id="@+id/btnResetCar"
-                                style="?attr/materialButtonOutlinedStyle"
-                                android:layout_width="match_parent"
-                                android:layout_height="40dp"
-                                android:layout_marginTop="6dp"
-                                android:text="Về mặc định"
-                                android:textSize="11sp"
-                                app:cornerRadius="10dp" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- 4. TỐC ĐỘ XE & HUD GPS -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="14dp"
-                app:cardBackgroundColor="@color/colorSurface"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="2dp"
-                app:strokeColor="@color/cardStroke"
-                app:strokeWidth="1dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="18dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
@@ -440,18 +327,53 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="🧭 Đồng hồ tốc độ GPS (HUD)"
+                                android:text="🔊 Âm thanh cảnh báo VietMap Live"
                                 android:textColor="@color/textPrimary"
-                                android:textSize="16sp"
+                                android:textSize="14sp"
                                 android:textStyle="bold" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="Hiển thị tốc độ xe thực tế thời gian thực"
+                                android:text="Phát giọng nói cảnh báo quá tốc độ &amp; camera phạt nguội"
                                 android:textColor="@color/textSecondary"
-                                android:textSize="12sp" />
+                                android:textSize="11sp" />
+                        </LinearLayout>
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchVietmapAudio"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            app:thumbTint="@color/colorAccentWarm" />
+                    </LinearLayout>
+
+                    <!-- Switch HUD GPS -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Hiện đồng hồ tốc độ GPS"
+                                android:textColor="@color/textPrimary"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Đo số km/h thực tế từ vệ tinh"
+                                android:textColor="@color/textSecondary"
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
@@ -465,7 +387,7 @@
                         android:id="@+id/tvSpeedOffset"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="14dp"
+                        android:layout_marginTop="12dp"
                         android:text="Bù tốc độ theo đồng hồ xe: 0%"
                         android:textColor="@color/textPrimary"
                         android:textSize="13sp" />
@@ -482,13 +404,13 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Điều chỉnh thanh trượt (-10% đến +10%) để khớp với công-tơ-mét VF5"
+                        android:text="Tinh chỉnh (-10% đến +10%) để khớp với công-tơ-mét xe VF5"
                         android:textColor="@color/textSecondary"
                         android:textSize="11sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 5. CUỘC GỌI & ÂM THANH -->
+            <!-- 4. CUỘC GỌI & ĐÀM THOẠI RẢNH TAY -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -518,7 +440,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:layout_marginBottom="12dp"
-                        android:text="Xử lý âm thanh thông minh khi đón khách Grab / XanhSM"
+                        android:text="Tự động tạm dừng YouTube/TikTok khi có cuộc gọi đón khách"
                         android:textColor="@color/textSecondary"
                         android:textSize="12sp" />
 
@@ -555,45 +477,10 @@
                             android:layout_height="wrap_content"
                             app:thumbTint="@color/colorAccentWarm" />
                     </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Kêu chuông qua loa điện thoại"
-                                android:textColor="@color/textPrimary"
-                                android:textSize="14sp" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Đổ chuông rõ ràng không bị nhạc trên xe lấn át"
-                                android:textColor="@color/textSecondary"
-                                android:textSize="11sp" />
-                        </LinearLayout>
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/switchCallRingtone"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            app:thumbTint="@color/colorAccentWarm" />
-                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 6. ỨNG DỤNG GIẢI TRÍ TRÊN XE -->
+            <!-- 5. ỨNG DỤNG GIẢI TRÍ: YOUTUBE & TIKTOK -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -613,7 +500,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="📱 Ứng dụng hiển thị trên xe"
+                        android:text="📱 Ứng dụng giải trí (Đã chặn quảng cáo)"
                         android:textColor="@color/textPrimary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
@@ -623,7 +510,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:layout_marginBottom="12dp"
-                        android:text="Bật/tắt các ứng dụng xuất hiện trên thanh chuyển đổi"
+                        android:text="Hỗ trợ tài khoản cá nhân, chuyển bài trực tiếp bằng phím vô lăng VF5"
                         android:textColor="@color/textSecondary"
                         android:textSize="12sp" />
 
@@ -661,58 +548,12 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="♪ TikTok (Lướt clip vô lăng)"
+                            android:text="♪ TikTok (Lướt clip bằng nút vô lăng)"
                             android:textColor="@color/textPrimary"
                             android:textSize="14sp" />
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/switchAppTikTok"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            app:thumbTint="@color/colorAccentWarm" />
-                    </LinearLayout>
-
-                    <!-- VTV Go -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="📺 VTV Go (Thời sự / TV)"
-                            android:textColor="@color/textPrimary"
-                            android:textSize="14sp" />
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/switchAppVtvGo"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            app:thumbTint="@color/colorAccentWarm" />
-                    </LinearLayout>
-
-                    <!-- FPT Play -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="⚽ FPT Play (Bóng đá / Phim)"
-                            android:textColor="@color/textPrimary"
-                            android:textSize="14sp" />
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/switchAppFptPlay"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             app:thumbTint="@color/colorAccentWarm" />
@@ -731,7 +572,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 7. ANDROID AUTO KHÔNG DÂY -->
+            <!-- 6. ANDROID AUTO KHÔNG DÂY -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -751,7 +592,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="📶 Android Auto Không Dây (Wireless)"
+                        android:text="📶 Kết nối Android Auto Không Dây"
                         android:textColor="@color/textPrimary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
@@ -760,7 +601,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="• Kết nối qua Bluetooth &amp; Wi-Fi của xe VinFast VF5 Plus\n• Ứng dụng tự động xuất hiện trên màn hình xe mà không cần cắm cáp\n• Đảm bảo bật 'Nguồn không xác định' trong Cài đặt nhà phát triển Android Auto."
+                        android:text="1. Bật Bluetooth &amp; Wi-Fi trên điện thoại\n2. Màn hình xe VF5 sẽ tự nhận diện kết nối\n3. Mở ứng dụng 'VF5 CarStream' trên màn hình ô tô để sử dụng."
                         android:textColor="@color/textSecondary"
                         android:textSize="12sp" />
                 </LinearLayout>
