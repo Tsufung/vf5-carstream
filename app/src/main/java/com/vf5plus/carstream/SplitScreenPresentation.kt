@@ -31,6 +31,11 @@ class SplitScreenPresentation(
     display: Display
 ) : Presentation(themedContext, display, android.R.style.Theme_DeviceDefault_NoActionBar) {
 
+    companion object {
+        var activeInstance: SplitScreenPresentation? = null
+            private set
+    }
+
     // Config values read from SharedPreferences (set by Studio)
     var splitRatio: Int = 79
     var hudX: Int = 16
@@ -84,6 +89,7 @@ class SplitScreenPresentation(
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        activeInstance = this
 
         rootLayout = FrameLayout(themedContext).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -463,7 +469,32 @@ class SplitScreenPresentation(
         }
     }
 
-    private fun triggerMediaKey(keyCode: Int) {
+    override fun onStop() {
+        if (activeInstance == this) {
+            activeInstance = null
+        }
+        super.onStop()
+    }
+
+    fun switchToYoutube() {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            selectTab("youtube")
+        }
+    }
+
+    fun switchToTikTok() {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            selectTab("tiktok")
+        }
+    }
+
+    fun switchToVtv() {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            selectTab("vtvgo")
+        }
+    }
+
+    fun triggerMediaKey(keyCode: Int) {
         val audioManager = themedContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val eventDown = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
         val eventUp = KeyEvent(KeyEvent.ACTION_UP, keyCode)

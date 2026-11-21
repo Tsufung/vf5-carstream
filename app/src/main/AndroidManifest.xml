@@ -10,13 +10,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES" />
     <uses-permission android:name="androidx.car.app.ACCESS_SURFACE" />
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="VF5 Stream"
+        android:label="VF5 CarStream"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
@@ -34,16 +35,28 @@
             </intent-filter>
         </activity>
 
-        <!-- DUY NHẤT 1 Service cho Android Auto -->
+        <!-- 1. Engine CarAppService cho Android Auto (Navigation Template & Studio Kéo Thả) -->
         <service
             android:name=".VF5CarStreamService"
-            android:label="VF5 Stream"
+            android:label="VF5 CarStream"
             android:icon="@mipmap/ic_launcher"
             android:exported="true"
             android:foregroundServiceType="connectedDevice|location">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
                 <category android:name="androidx.car.app.category.NAVIGATION" />
+            </intent-filter>
+        </service>
+
+        <!-- 2. Engine MediaBrowserService cho Android Auto (Tự động hiển thị lên xe 100% không bị lọc) -->
+        <service
+            android:name=".VF5MediaService"
+            android:label="VF5 CarStream"
+            android:icon="@mipmap/ic_launcher"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </service>
 
