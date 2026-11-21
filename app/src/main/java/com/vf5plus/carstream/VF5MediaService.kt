@@ -2,6 +2,15 @@ package com.vf5plus.carstream
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -55,10 +64,15 @@ class VF5MediaService : MediaBrowserServiceCompat() {
                 .build()
             setPlaybackState(state)
 
+            val defaultArt = createAlbumArt("VF5 CarStream", "Bản Đồ 2/3 + YouTube/TikTok")
             val metadata = MediaMetadataCompat.Builder()
-                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, "VF5 CarStream — Đang Hoạt Động")
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, "VF5 CarStream")
                 .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, "VinFast VF5 Plus 2025")
-                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Bản đồ 2/3 + YouTube/TikTok 1/3")
+                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Bản đồ 2/3 + YouTube 1/3")
+                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, 300000L)
+                .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, defaultArt)
+                .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, defaultArt)
+                .putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, defaultArt)
                 .build()
             setMetadata(metadata)
 
@@ -79,14 +93,14 @@ class VF5MediaService : MediaBrowserServiceCompat() {
 
                 override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
                     updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
-                    val title = when (mediaId) {
+                    val (title, subtitle) = when (mediaId) {
                         "yt_play" -> {
                             SplitScreenPresentation.activeInstance?.switchToYoutube()
-                            "YouTube (Chặn Quảng Cáo)"
+                            Pair("YouTube (Chặn Quảng Cáo)", "Nhạc Lái Xe Buổi Tối")
                         }
                         "tk_play" -> {
                             SplitScreenPresentation.activeInstance?.switchToTikTok()
-                            "TikTok Shorts Siêu Mượt"
+                            Pair("TikTok Shorts", "Lướt Video Vô Lăng VF5")
                         }
                         "map_open" -> {
                             SplitScreenPresentation.activeInstance?.let { p ->
@@ -94,7 +108,7 @@ class VF5MediaService : MediaBrowserServiceCompat() {
                                     p.mapWebView.loadUrl("file:///android_asset/map.html")
                                 }
                             }
-                            "Bản Đồ Dẫn Đường Realtime"
+                            Pair("Bản Đồ GPS Toàn Màn Hình", "Bản Đồ Nền Tối Chống Chói")
                         }
                         "qr_show" -> {
                             SplitScreenPresentation.activeInstance?.let { p ->
@@ -102,17 +116,23 @@ class VF5MediaService : MediaBrowserServiceCompat() {
                                     p.toggleQr()
                                 }
                             }
-                            "Mã QR Thu Tiền Khách"
+                            Pair("Mã QR Thu Tiền Khách", "Grab & XanhSM Chuyển Khoản")
                         }
                         else -> {
                             SplitScreenPresentation.activeInstance?.switchToYoutube()
-                            "VF5 CarStream Studio"
+                            Pair("VF5 CarStream", "Bản đồ 2/3 + YouTube 1/3")
                         }
                     }
+
+                    val art = createAlbumArt(title, subtitle)
                     val meta = MediaMetadataCompat.Builder()
                         .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
                         .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, "VinFast VF5 Plus 2025")
-                        .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Đang phát trên màn hình xe")
+                        .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, subtitle)
+                        .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, 300000L)
+                        .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, art)
+                        .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, art)
+                        .putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, art)
                         .build()
                     setMetadata(meta)
                 }
@@ -129,6 +149,64 @@ class VF5MediaService : MediaBrowserServiceCompat() {
             setSessionToken(sessionToken)
             isActive = true
         }
+    }
+
+    private fun createAlbumArt(title: String, subtitle: String): Bitmap {
+        val size = 512
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        // Dark gradient background
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f, 0f, size.toFloat(), size.toFloat(),
+                Color.parseColor("#1B1E26"),
+                Color.parseColor("#0B0C10"),
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), bgPaint)
+
+        // Sleek border with VinFast Orange accent
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 6f
+            color = Color.parseColor("#C86A3E")
+        }
+        canvas.drawRoundRect(14f, 14f, (size - 14).toFloat(), (size - 14).toFloat(), 28f, 28f, borderPaint)
+
+        // Try decoding launcher icon
+        try {
+            val icon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
+            if (icon != null) {
+                val iconSize = 200
+                val left = (size - iconSize) / 2f
+                val top = 80f
+                val dst = RectF(left, top, left + iconSize, top + iconSize)
+                canvas.drawBitmap(icon, null, dst, null)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Title text
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 30f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        canvas.drawText(title, size / 2f, size - 110f, textPaint)
+
+        // Subtitle text
+        textPaint.apply {
+            color = Color.parseColor("#34D399")
+            textSize = 20f
+            typeface = Typeface.DEFAULT
+        }
+        canvas.drawText(subtitle, size / 2f, size - 65f, textPaint)
+
+        return bitmap
     }
 
     private fun updatePlaybackState(state: Int) {
