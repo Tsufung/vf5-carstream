@@ -52,18 +52,22 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
 
-      - name: Upload Debug APK to Artifacts
+      - name: Prepare Versioned APK
+        run: |
+          VERSION_CODE=$(grep "versionCode =" app/build.gradle.kts | tr -dc '0-9')
+          APK_NAME="VF5-CarStream-v${VERSION_CODE}.apk"
+          echo "Naming APK as: $APK_NAME"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK_NAME"
+          ls -lh "$APK_NAME"
+
+      - name: Upload Versioned APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: VF5-CarStream-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: VF5-CarStream-v*.apk
           retention-days: 30
 
       - name: Display APK info
         run: |
           echo "=== Build completed successfully ==="
-          echo "APK file:"
-          ls -la app/build/outputs/apk/debug/app-debug.apk
-          echo ""
-          echo "To install on Android Auto (Android 14/15/16):"
-          echo 'adb install -i "com.android.vending" app/build/outputs/apk/debug/app-debug.apk'
+          ls -la VF5-CarStream-v*.apk

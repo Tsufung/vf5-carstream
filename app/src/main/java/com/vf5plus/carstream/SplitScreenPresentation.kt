@@ -11,9 +11,9 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Display
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -30,12 +30,15 @@ import java.io.ByteArrayInputStream
 /**
  * SplitScreenPresentation — hiển thị trên màn hình xe VF5 Plus 2025 (8 inch).
  *
- * Tính năng tùy biến:
- * - Tỉ lệ chia màn hình: 2/3 + 1/3, 50/50, Toàn màn hình Map, Toàn màn hình Media
- * - HUD tốc độ GPS thực tế ở góc trên màn hình
- * - Overlay Mã QR thanh toán cước xe cho khách Grab/XanhSM
- * - Tab bar động hỗ trợ YouTube, TikTok, VTV Go, FPT Play và nút QR thu tiền
- * - Chặn quảng cáo, AudioFocus tự dừng khi có cuộc gọi
+ * Tính năng nổi bật:
+ * - Google Maps với dữ liệu giao thông thời gian thực (Traffic Layer: xanh/cam/đỏ/đỏ sẫm)
+ * - Tự động đồng bộ GPS hiển thị vị trí xe trực tiếp trên bản đồ
+ * - Chuyển tiếp mượt sang Google Maps Native khi bấm bắt đầu điều hướng
+ * - Tùy biến tỉ lệ chia màn hình: 2/3 + 1/3, 50/50, Toàn màn hình Map, Toàn màn hình Media
+ * - HUD tốc độ GPS thực tế ở góc trên màn hình xe
+ * - Modal Overlay Mã QR thanh toán cước xe cho khách Grab/XanhSM
+ * - Tab bar động hỗ trợ YouTube (chặn quảng cáo), TikTok (vô lăng), VTV Go, FPT Play
+ * - Quản lý AudioFocus tự ngắt video khi có cuộc gọi và phát lại sau khi cúp máy
  */
 class SplitScreenPresentation(
     private val outerContext: Context,
@@ -70,7 +73,7 @@ class SplitScreenPresentation(
     private var focusRequest: AudioFocusRequest? = null
     private var hasAudioFocus = false
 
-    // Chặn quảng cáo
+    // Domain chặn quảng cáo
     private val adDomains = setOf(
         "doubleclick.net",
         "googlesyndication.com",
@@ -125,7 +128,6 @@ class SplitScreenPresentation(
             setBackgroundColor(if (config.themeMode == VF5Config.THEME_LIGHT) 0xFFF0F0F0.toInt() else 0xFF000000.toInt())
         }
 
-        // Hàng ngang chính chứa Map và Media
         val contentRow = LinearLayout(displayCtx).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = FrameLayout.LayoutParams(
@@ -169,7 +171,6 @@ class SplitScreenPresentation(
         )
         rightColumn.addView(mediaContainer)
 
-        // Áp dụng tỉ lệ màn hình
         applyScreenRatio(contentRow)
 
         contentRow.addView(mapContainer)
@@ -186,7 +187,7 @@ class SplitScreenPresentation(
 
         setContentView(rootLayout)
 
-        // Nạp trang mặc định
+        // Nạp Google Maps với lớp giao thông realtime
         loadGoogleMaps()
         loadYouTube()
     }
@@ -231,7 +232,6 @@ class SplitScreenPresentation(
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // YouTube
         if (config.isYouTubeEnabled) {
             val btn = createTabButton("▶ YouTube", "youtube") {
                 selectTab("youtube")
@@ -240,7 +240,6 @@ class SplitScreenPresentation(
             tabBar.addView(btn)
         }
 
-        // TikTok
         if (config.isTikTokEnabled) {
             val btn = createTabButton("♪ TikTok", "tiktok") {
                 selectTab("tiktok")
@@ -249,7 +248,6 @@ class SplitScreenPresentation(
             tabBar.addView(btn)
         }
 
-        // VTV Go
         if (config.isVtvGoEnabled) {
             val btn = createTabButton("📺 VTV Go", "vtvgo") {
                 selectTab("vtvgo")
@@ -258,7 +256,6 @@ class SplitScreenPresentation(
             tabBar.addView(btn)
         }
 
-        // FPT Play
         if (config.isFptPlayEnabled) {
             val btn = createTabButton("⚽ FPT Play", "fptplay") {
                 selectTab("fptplay")
@@ -267,7 +264,7 @@ class SplitScreenPresentation(
             tabBar.addView(btn)
         }
 
-        // Nút QR Thu Tiền (Luôn có để tài xế 1 chạm mở QR)
+        // Nút QR Thu Tiền 1 chạm
         val qrBtn = TextView(displayCtx).apply {
             text = "💳 QR Thu Tiền"
             setTextColor(0xFFFFFFFF.toInt())
@@ -275,7 +272,7 @@ class SplitScreenPresentation(
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-            setBackgroundColor(0xFFC86A3E.toInt()) // Màu cam nhấn mạnh
+            setBackgroundColor(0xFFC86A3E.toInt())
             setPadding(4, 0, 4, 0)
             setOnClickListener {
                 togglePaymentQr()
@@ -322,7 +319,7 @@ class SplitScreenPresentation(
     private fun buildSpeedHudBadge(): TextView {
         return TextView(displayCtx).apply {
             text = "0 km/h"
-            setTextColor(0xFF00FF7F.toInt()) // Xanh dạ quang dễ nhìn
+            setTextColor(0xFF00FF7F.toInt())
             textSize = 14f
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -352,11 +349,10 @@ class SplitScreenPresentation(
         speedHudBadge.visibility = View.VISIBLE
         speedHudBadge.text = "$speedKmh km/h"
 
-        // Đổi màu cảnh báo nếu chạy quá tốc độ (trên 80km/h)
         if (speedKmh > 80) {
-            speedHudBadge.setTextColor(0xFFFF3333.toInt()) // Đỏ cảnh báo
+            speedHudBadge.setTextColor(0xFFFF3333.toInt())
         } else {
-            speedHudBadge.setTextColor(0xFF00FF7F.toInt()) // Xanh an toàn
+            speedHudBadge.setTextColor(0xFF00FF7F.toInt())
         }
     }
 
@@ -454,7 +450,7 @@ class SplitScreenPresentation(
         }
     }
 
-    // ─── WebViews ─────────────────────────────────────────────────────────────
+    // ─── WebViews: Google Maps với Dữ Liệu Giao Thông Realtime ─────────────────
 
     private fun buildMapWebView(): WebView {
         val wv = WebView(displayCtx)
@@ -462,6 +458,7 @@ class SplitScreenPresentation(
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
+            setGeolocationEnabled(true) // BẬT ĐỊNH VỊ GPS CHO GOOGLE MAPS
             useWideViewPort = true
             loadWithOverviewMode = true
             setSupportZoom(true)
@@ -476,9 +473,21 @@ class SplitScreenPresentation(
             }
         }
         wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+
+        // WebChromeClient tự động cấp quyền vị trí cho Google Maps
+        wv.webChromeClient = object : WebChromeClient() {
+            override fun onGeolocationPermissionsShowPrompt(
+                origin: String,
+                callback: GeolocationPermissions.Callback
+            ) {
+                callback.invoke(origin, true, false)
+            }
+        }
+
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
+                // Mở Google Maps native khi tài xế bấm bắt đầu điều hướng
                 if (url.startsWith("geo:") || url.contains("maps.google.com") && url.contains("navigate")) {
                     try {
                         val intent = android.content.Intent(
@@ -498,6 +507,22 @@ class SplitScreenPresentation(
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 return blockAdRequest(request.url.toString())
+            }
+
+            override fun onPageFinished(view: WebView, url: String) {
+                // Tự động kích hoạt lớp giao thông thời gian thực (Live Traffic)
+                view.evaluateJavascript(
+                    """
+                    (function() {
+                        var trafficBtn = document.querySelector('[data-value="traffic"]') ||
+                                         document.querySelector('button[aria-label*="Giao thông"]') ||
+                                         document.querySelector('button[aria-label*="Traffic"]');
+                        if (trafficBtn && !trafficBtn.classList.contains('selected')) {
+                            trafficBtn.click();
+                        }
+                    })();
+                    """.trimIndent(), null
+                )
             }
         }
         wv.addJavascriptInterface(MapJsInterface(), "VF5Map")
@@ -565,10 +590,11 @@ class SplitScreenPresentation(
         return wv
     }
 
-    // ─── Navigation ───────────────────────────────────────────────────────────
+    // ─── Google Maps: Dữ liệu giao thông Realtime ─────────────────────────────
 
     fun loadGoogleMaps() {
-        mapWebView.loadUrl("https://www.google.com/maps/@?api=1&map_action=map")
+        // Tham số layer=traffic mở trực tiếp lớp tình trạng kẹt xe xanh/cam/đỏ của Google
+        mapWebView.loadUrl("https://www.google.com/maps/@?api=1&map_action=map&layer=traffic")
     }
 
     fun loadYouTube() {

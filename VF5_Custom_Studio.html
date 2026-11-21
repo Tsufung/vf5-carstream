@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VF5 CarStream — Studio Kéo Thả Tự Do (Drag & Drop)</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    .vf5-bezel {
+      box-shadow: 0 25px 60px -15px rgba(0,0,0,0.8), 0 0 0 10px #1e2025, 0 0 0 14px #0d0e10;
+      border-radius: 24px;
+    }
+    .drag-item {
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+    .drag-item:active {
+      cursor: grabbing;
+    }
+    .divider-drag {
+      cursor: col-resize;
+      user-select: none;
+    }
+    .divider-drag:hover .divider-handle,
+    .divider-drag:active .divider-handle {
+      background-color: #C86A3E;
+      box-shadow: 0 0 12px #C86A3E;
+    }
+    @keyframes pulse-subtle {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    .pulse-qr {
+      animation: pulse-subtle 3s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-[#0e1013] text-[#E2E5E9] font-sans p-4 m-0 min-h-screen antialiased select-none">
+
+  <!-- Header Bar -->
+  <header class="max-w-7xl mx-auto flex flex-wrap items-center justify-between pb-4 border-b border-[#242731] mb-6">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-2xl bg-[#C86A3E] flex items-center justify-center font-black text-white text-xl shadow-lg">
+        VF5
+      </div>
+      <div>
+        <h1 class="text-xl font-black text-white flex items-center gap-2">
+          VF5 CarStream — Studio Kéo Thả Tùy Biến
+          <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#C86A3E]/20 text-[#C86A3E] border border-[#C86A3E]/40">
+            🖐️ FREE DRAG & DROP
+          </span>
+        </h1>
+        <p class="text-xs text-[#8E95A3]">Tự do kéo thanh chia đôi bản đồ, kéo thả đồng hồ GPS, di chuyển mã QR ngân hàng khắp màn hình xe</p>
+      </div>
+    </div>
+
+    <!-- Quick action buttons -->
+    <div class="flex items-center gap-2 text-xs">
+      <button onclick="resetToGrabDefault()" class="px-3.5 py-2 rounded-xl bg-[#1C1F27] border border-[#2F3443] hover:border-[#C86A3E] text-white font-semibold transition">
+        ↺ Mặc định Grab/XanhSM (67% - 33%)
+      </button>
+      <button onclick="saveLayoutConfig()" class="px-4 py-2 rounded-xl bg-[#C86A3E] hover:bg-[#b0582e] text-white font-bold transition shadow-lg flex items-center gap-1.5">
+        💾 Lưu bố cục vào xe
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+    <!-- KHUNG MÀN HÌNH XE 8 INCH (CHIẾM 9 CỘT) -->
+    <div class="xl:col-span-9 space-y-3">
+      
+      <div class="flex items-center justify-between text-xs text-gray-400">
+        <span class="font-bold text-gray-300 flex items-center gap-1.5">
+          <span class="text-[#C86A3E]">●</span> Kéo thanh màu cam ở giữa để chia tỉ lệ tùy ý • Kéo thả các widget trực tiếp trên màn hình
+        </span>
+        <div class="font-mono bg-[#191C24] px-3 py-1 rounded-lg border border-[#2B303E]">
+          Bản đồ: <span id="lblMapPct" class="text-cyan-400 font-bold">67%</span> | Media: <span id="lblMediaPct" class="text-[#C86A3E] font-bold">33%</span>
+        </div>
+      </div>
+
+      <!-- Khung viền màn hình xe VinFast VF5 8 inch -->
+      <div class="vf5-bezel bg-black p-4 relative overflow-hidden border border-[#2A2E3B]">
+
+        <!-- Top status bar xe -->
+        <div class="h-7 bg-[#0b0c0f] flex items-center justify-between px-4 text-xs text-gray-400 border-b border-[#1c1e24]">
+          <div class="flex items-center gap-2">
+            <span class="text-emerald-400 font-bold flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> VinFast VF5 Plus
+            </span>
+            <span class="text-gray-600">|</span>
+            <span class="text-gray-300">Wireless Android Auto Active</span>
+          </div>
+          <div class="flex items-center gap-3 font-mono text-[11px]">
+            <span>4G LTE</span>
+            <span>📶 100%</span>
+            <span id="screenClock">19:25</span>
+          </div>
+        </div>
+
+        <!-- KHUNG HIỂN THỊ CHÍNH (8 INCH CAR DISPLAY VIEWPORT) -->
+        <div id="carViewport" class="h-[430px] w-full flex relative bg-black overflow-hidden">
+
+          <!-- 1. CỘT TRÁI: GOOGLE MAPS (CHIỀU RỘNG CO GIÃN THEO KÉO THẢ) -->
+          <div id="paneMap" class="h-full bg-[#161a22] relative overflow-hidden flex flex-col" style="width: 67%;">
+            
+            <!-- Map background SVG simulation -->
+            <div class="absolute inset-0 bg-[#12151b] flex items-center justify-center">
+              <svg class="w-full h-full opacity-40" viewBox="0 0 600 400" fill="none">
+                <path d="M-50,100 Q150,160 350,80 T700,120" stroke="#414D63" stroke-width="26" />
+                <path d="M80,-50 Q120,200 280,240 T500,450" stroke="#414D63" stroke-width="20" />
+                <path d="M-20,300 L650,220" stroke="#333D4F" stroke-width="14" />
+                <!-- Active Navigation Route for Grab/XanhSM -->
+                <path d="M120,360 C150,260 220,220 280,150 L420,90" stroke="#38BDF8" stroke-width="8" stroke-linecap="round" />
+                <circle cx="120" cy="360" r="11" fill="#0284C7" stroke="#FFFFFF" stroke-width="4" />
+                <circle cx="420" cy="90" r="8" fill="#EF4444" stroke="#FFFFFF" stroke-width="3" />
+              </svg>
+            </div>
+
+            <!-- Grab/XanhSM Route Turn Banner -->
+            <div class="relative z-10 m-3 p-3 rounded-2xl bg-[#0B132B]/95 border border-cyan-500/40 text-white shadow-xl max-w-[280px]">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl text-cyan-400 font-black">↱</span>
+                <div>
+                  <div class="text-xs text-cyan-300 font-bold">Sau 250m nữa</div>
+                  <div class="font-bold text-sm truncate">Rẽ phải vào Nguyễn Huệ</div>
+                  <div class="text-[10px] text-gray-400">Đón khách cuốc #XSM-8892</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Biển giới hạn tốc độ góc dưới -->
+            <div class="absolute bottom-3 left-3 z-10 flex items-center gap-2">
+              <div class="w-10 h-10 rounded-full bg-white border-4 border-red-600 flex items-center justify-center font-black text-black text-xs shadow-lg">
+                60
+              </div>
+              <div class="px-2.5 py-1 rounded-xl bg-black/80 border border-gray-700 text-[10px] text-gray-300 backdrop-blur-sm">
+                📍 Quận 1, TP. Hồ Chí Minh
+              </div>
+            </div>
+
+          </div>
+
+          <!-- THANH KÉO CHIA ĐÔI MÀN HÌNH (DRAGGABLE SPLIT DIVIDER) -->
+          <div id="splitDivider" class="w-3.5 h-full bg-[#1b1e26] hover:bg-[#C86A3E]/60 active:bg-[#C86A3E] divider-drag z-30 flex items-center justify-center transition-colors shadow-2xl relative">
+            <div class="divider-handle w-1.5 h-16 rounded-full bg-gray-500 transition-all flex flex-col items-center justify-center gap-1">
+              <div class="w-1 h-1 rounded-full bg-white opacity-80"></div>
+              <div class="w-1 h-1 rounded-full bg-white opacity-80"></div>
+              <div class="w-1 h-1 rounded-full bg-white opacity-80"></div>
+            </div>
+            <!-- Tooltip khi rê chuột -->
+            <div class="absolute top-2 left-1/2 -translate-x-1/2 bg-[#C86A3E] text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-0 hover:opacity-100 transition pointer-events-none whitespace-nowrap">
+              KÉO
+            </div>
+          </div>
+
+          <!-- 2. CỘT PHẢI: MEDIA PANE (YOUTUBE / TIKTOK / VTV GO) -->
+          <div id="paneMedia" class="h-full bg-[#0a0c0e] flex flex-col relative overflow-hidden" style="width: 33%;">
+            
+            <!-- Tab chuyển nhanh -->
+            <div class="h-10 bg-[#16181f] border-b border-[#252833] flex items-center justify-between px-1.5 text-xs">
+              <button id="mediaTabYt" onclick="setMediaTab('youtube')" class="flex-1 py-1 rounded-lg bg-[#C86A3E] text-white font-bold text-center text-[11px] shadow">
+                ▶ YouTube
+              </button>
+              <button id="mediaTabTk" onclick="setMediaTab('tiktok')" class="flex-1 py-1 rounded-lg text-gray-400 font-medium text-center text-[11px] hover:text-white">
+                ♪ TikTok
+              </button>
+              <button id="mediaTabVtv" onclick="setMediaTab('vtvgo')" class="flex-1 py-1 rounded-lg text-gray-400 font-medium text-center text-[11px] hover:text-white">
+                📺 VTV
+              </button>
+            </div>
+
+            <!-- YouTube Video player -->
+            <div id="viewYouTube" class="flex-1 p-2 flex flex-col justify-between bg-black">
+              <div class="relative w-full aspect-video rounded-xl bg-slate-900 overflow-hidden border border-gray-800 shadow-md">
+                <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/30 flex items-end p-2.5">
+                  <span id="playingTitle" class="text-xs font-semibold text-white truncate max-w-full">
+                    🎵 Tuyển Tập Nhạc Lái Xe Buổi Tối Cho Bác Tài 2026
+                  </span>
+                </div>
+                <div class="absolute top-1.5 right-1.5 bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow">
+                  CHẶN QC
+                </div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <div class="w-11 h-11 rounded-full bg-red-600 flex items-center justify-center text-white text-xl shadow-xl hover:scale-110 transition cursor-pointer">
+                    ▶
+                  </div>
+                </div>
+              </div>
+
+              <!-- Media bar -->
+              <div class="space-y-1.5 my-auto">
+                <div class="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-[#C86A3E] h-full w-1/2"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-gray-400 font-mono">
+                  <span>03:12</span>
+                  <span>06:45</span>
+                </div>
+              </div>
+
+              <div class="text-[10px] text-gray-400 text-center bg-gray-900/80 py-1.5 rounded-lg border border-gray-800">
+                👤 Đăng nhập: <span class="text-white font-medium">Tài khoản Google cá nhân</span>
+              </div>
+            </div>
+
+            <!-- TikTok View -->
+            <div id="viewTikTok" class="hidden flex-1 p-3 flex flex-col justify-between items-center text-center bg-gradient-to-b from-[#181a24] to-black">
+              <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                <span class="text-cyan-400">♪</span> TikTok Shorts
+              </div>
+              <div class="w-24 h-36 rounded-2xl bg-slate-800 border-2 border-slate-700 flex flex-col justify-end p-2 text-left shadow-2xl">
+                <span class="text-[10px] text-white font-bold">@vinfast</span>
+                <span class="text-[9px] text-gray-300">VF5 Plus độ đẹp</span>
+              </div>
+              <div class="text-[10px] text-cyan-400 bg-cyan-950/60 px-2.5 py-1 rounded-xl border border-cyan-800">
+                Bấm Next trên vô lăng để lướt
+              </div>
+            </div>
+
+            <!-- VTV Go View -->
+            <div id="viewVtvGo" class="hidden flex-1 p-4 flex flex-col justify-center items-center text-center">
+              <div class="w-14 h-14 rounded-2xl bg-red-700 flex items-center justify-center font-black text-white text-lg shadow-xl mb-2">
+                VTV1
+              </div>
+              <div class="text-xs font-bold text-white">Thời Sự Trực Tuyến 19:00</div>
+              <span class="text-[10px] text-emerald-400 font-mono mt-1">HD 1080p • KHÔNG GIẬT LAG</span>
+            </div>
+
+          </div>
+
+          <!-- ==================== CÁC WIDGET KÉO THẢ TỰ DO (DRAGGABLE WIDGETS) ==================== -->
+
+          <!-- WIDGET 1: HUD TỐC ĐỘ GPS (KÉO THẢ TỰ DO KHẮP MÀN HÌNH) -->
+          <div id="widgetSpeed" class="drag-item absolute z-40 bg-black/85 backdrop-blur-md px-3.5 py-2 rounded-2xl border-2 border-emerald-500/60 shadow-2xl flex items-center gap-2 group"
+               style="top: 16px; left: 16px;">
+            <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 live-dot"></div>
+            <div class="flex items-baseline gap-1">
+              <span id="liveSpeedNum" class="font-mono text-xl font-black text-emerald-400">52</span>
+              <span class="text-[10px] font-bold text-gray-300">KM/H</span>
+            </div>
+            <!-- Drag handle icon -->
+            <div class="text-gray-500 group-hover:text-emerald-400 text-xs pl-1">
+              ⠿
+            </div>
+          </div>
+
+          <!-- WIDGET 2: MÃ QR THANH TOÁN (KÉO THẢ & CO GIÃN TỰ DO) -->
+          <div id="widgetQr" class="drag-item absolute z-40 bg-white rounded-2xl p-2.5 shadow-2xl border-2 border-[#C86A3E] text-slate-900 group"
+               style="top: 130px; left: 24px; width: 140px;">
+            <div class="flex items-center justify-between pb-1 border-b border-gray-200 mb-1.5">
+              <span class="text-[10px] font-black text-[#C86A3E] uppercase flex items-center gap-1">
+                💳 QR TRẢ TIỀN
+              </span>
+              <span class="text-gray-400 group-hover:text-[#C86A3E] text-xs">⠿</span>
+            </div>
+            
+            <div class="aspect-square bg-slate-100 rounded-xl p-1.5 border border-gray-200 flex items-center justify-center">
+              <svg class="w-full h-full" viewBox="0 0 100 100" fill="#1e293b">
+                <rect x="5" y="5" width="26" height="26" rx="4" stroke="#1e293b" stroke-width="5" fill="none" />
+                <rect x="12" y="12" width="12" height="12" fill="#C86A3E" />
+                <rect x="69" y="5" width="26" height="26" rx="4" stroke="#1e293b" stroke-width="5" fill="none" />
+                <rect x="76" y="12" width="12" height="12" fill="#C86A3E" />
+                <rect x="5" y="69" width="26" height="26" rx="4" stroke="#1e293b" stroke-width="5" fill="none" />
+                <rect x="12" y="76" width="12" height="12" fill="#C86A3E" />
+                <rect x="36" y="8" width="6" height="6" /><rect x="48" y="14" width="6" height="6" />
+                <rect x="8" y="38" width="6" height="6" /><rect x="36" y="38" width="6" height="6" />
+                <rect x="60" y="38" width="6" height="6" /><rect x="72" y="60" width="6" height="6" />
+              </svg>
+            </div>
+            <div class="text-[9px] text-center font-bold text-gray-600 mt-1 truncate">
+              Quét trả tiền cước
+            </div>
+          </div>
+
+          <!-- WIDGET 3: ẢNH XE VINFAST VF5 PLUS (KÉO THẢ TỰ DO) -->
+          <div id="widgetCar" class="drag-item absolute z-30 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl border border-gray-700 shadow-xl flex items-center gap-2 group"
+               style="bottom: 16px; right: 16px;">
+            <div class="w-7 h-7 rounded-lg bg-[#C86A3E] flex items-center justify-center text-sm shadow">
+              🚗
+            </div>
+            <div class="text-[11px] text-white font-bold">
+              VF5 Plus 2025
+            </div>
+            <div class="text-gray-500 group-hover:text-white text-xs pl-0.5">
+              ⠿
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Action Strip thanh công cụ dưới màn hình xe -->
+        <div class="h-12 bg-[#121419] border-t border-[#222530] flex items-center justify-between px-4 text-xs">
+          <div class="flex items-center gap-2">
+            <button class="px-3 py-1.5 rounded-xl bg-[#20242e] text-gray-200 hover:text-white font-medium flex items-center gap-1.5 transition">
+              🏠 Trang chủ
+            </button>
+            <button onclick="toggleQrVisibility()" id="btnToggleQrBar" class="px-3.5 py-1.5 rounded-xl bg-[#C86A3E] text-white font-bold flex items-center gap-1.5 shadow-lg transition">
+              💳 Mã QR Thu Tiền
+            </button>
+          </div>
+
+          <!-- Cụm nút mô phỏng vô lăng xe -->
+          <div class="flex items-center gap-2 bg-[#0a0b0e] px-3 py-1 rounded-xl border border-[#272b38]">
+            <span class="text-[10px] text-gray-400 font-bold uppercase">Phím Vô Lăng:</span>
+            <button onclick="simulateSteer('prev')" class="p-1 px-2 rounded-lg bg-[#1e222b] text-gray-200 hover:text-white font-bold">⏮ Lùi</button>
+            <button onclick="simulateSteer('playpause')" id="steerPlayBtn" class="p-1 px-2.5 rounded-lg bg-[#C86A3E] text-white font-bold">⏯ Play/Pause</button>
+            <button onclick="simulateSteer('next')" class="p-1 px-2 rounded-lg bg-[#1e222b] text-gray-200 hover:text-white font-bold">⏭ Tiếp</button>
+          </div>
+
+          <button onclick="reloadWeb()" class="px-3 py-1.5 rounded-xl bg-[#20242e] text-gray-300 hover:text-white">
+            🔄 Tải lại
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Live Drag & Action Logger -->
+      <div class="p-3 rounded-2xl bg-[#15171E] border border-[#262A37] text-xs text-gray-300 flex items-center justify-between">
+        <span class="flex items-center gap-2">
+          <span class="text-[#C86A3E] font-bold">⚡ Trạng thái:</span>
+          <span id="logDisplay">Bạn có thể giữ chuột và kéo thanh chia đôi, hoặc kéo các ô widget trên màn hình xe!</span>
+        </span>
+        <span class="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+          LAYOUT SYNC: OK
+        </span>
+      </div>
+
+    </div>
+
+    <!-- BẢNG ĐIỀU KHIỂN THÔNG SỐ (CHIẾM 3 CỘT) -->
+    <div class="xl:col-span-3 space-y-4">
+      
+      <div class="text-sm font-bold uppercase tracking-wider text-[#C86A3E] flex items-center gap-2">
+        <span>⚙️</span> Thông Số Kéo Thả (Tọa độ)
+      </div>
+
+      <!-- Tọa độ các thành phần -->
+      <div class="bg-[#15171E] rounded-3xl p-4 border border-[#262A37] space-y-4 text-xs">
+        
+        <!-- Tỉ lệ màn hình -->
+        <div class="space-y-1.5 pb-3 border-b border-[#252835]">
+          <div class="font-bold text-white flex justify-between">
+            <span>Tỉ lệ chia màn hình:</span>
+            <span id="statSplit" class="text-cyan-400 font-mono">67% : 33%</span>
+          </div>
+          <div class="text-[11px] text-gray-400">Tự do kéo thanh chia đôi ở giữa để điều chỉnh kích thước bản đồ theo ý muốn.</div>
+        </div>
+
+        <!-- Tọa độ HUD Tốc độ -->
+        <div class="space-y-1.5 pb-3 border-b border-[#252835]">
+          <div class="font-bold text-white flex justify-between">
+            <span>Vị trí HUD Tốc độ:</span>
+            <span id="statSpeedPos" class="text-emerald-400 font-mono">X: 16px, Y: 16px</span>
+          </div>
+          <div class="text-[11px] text-gray-400">Giữ chuột vào ô km/h và kéo thả đến vị trí bất kỳ (góc trái, góc phải...).</div>
+        </div>
+
+        <!-- Tọa độ Mã QR -->
+        <div class="space-y-1.5 pb-3 border-b border-[#252835]">
+          <div class="font-bold text-white flex justify-between">
+            <span>Vị trí Widget Mã QR:</span>
+            <span id="statQrPos" class="text-[#C86A3E] font-mono">X: 24px, Y: 130px</span>
+          </div>
+          <div class="text-[11px] text-gray-400">Kéo mã QR đến vị trí thuận mắt nhất để khách ngồi sau dễ quét điện thoại.</div>
+        </div>
+
+        <!-- Cỡ Mã QR -->
+        <div class="space-y-1.5 pb-3 border-b border-[#252835]">
+          <div class="font-bold text-white flex justify-between">
+            <span>Kích cỡ ô Mã QR:</span>
+            <span id="statQrSize" class="text-amber-400 font-mono">140 px</span>
+          </div>
+          <input type="range" min="100" max="220" value="140" oninput="resizeQrWidget(this.value)" class="w-full accent-[#C86A3E]">
+        </div>
+
+        <!-- Cài đặt Bù tốc độ -->
+        <div class="space-y-1.5">
+          <div class="font-bold text-white flex justify-between">
+            <span>Bù tốc độ công-tơ-mét VF5:</span>
+            <span id="statSpeedOffset" class="text-cyan-400 font-mono">0%</span>
+          </div>
+          <input type="range" min="-10" max="10" value="0" oninput="setSpeedOffset(this.value)" class="w-full accent-[#C86A3E]">
+          <div class="text-[10px] text-gray-400">Khớp số km/h với táp-lô xe VinFast VF5 Plus</div>
+        </div>
+
+      </div>
+
+      <!-- Hướng dẫn sử dụng nhanh -->
+      <div class="bg-[#1C1A17] rounded-3xl p-4 border border-[#3E342B] space-y-2 text-xs">
+        <div class="font-bold text-[#E5935A] flex items-center gap-1.5">
+          💡 Lưu ý cho Bác tài:
+        </div>
+        <p class="text-[11px] text-gray-300 leading-relaxed">
+          Mọi vị trí kéo thả bạn chỉnh tại đây đã được tích hợp vào mã nguồn Android. Khi cài app lên điện thoại và kết nối xe VF5, app sẽ ghi nhớ chính xác vị trí bạn đã đặt!
+        </p>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    // Live clock
+    setInterval(() => {
+      const d = new Date();
+      document.getElementById('screenClock').textContent = 
+        String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }, 1000);
+
+    // Speed simulator
+    let speed = 52;
+    let offset = 0;
+    setInterval(() => {
+      const delta = Math.floor(Math.random() * 5) - 2;
+      speed = Math.max(35, Math.min(80, speed + delta));
+      const adjusted = Math.round(speed * (1 + offset / 100));
+      document.getElementById('liveSpeedNum').textContent = adjusted;
+    }, 1800);
+
+    function setSpeedOffset(val) {
+      offset = parseInt(val);
+      document.getElementById('statSpeedOffset').textContent = (offset > 0 ? '+' : '') + offset + '%';
+      log(`Đã chỉnh bù tốc độ: ${offset}%`);
+    }
+
+    // ==================== KÉO THẢ THANH CHIA ĐÔI MÀN HÌNH ====================
+    const divider = document.getElementById('splitDivider');
+    const viewport = document.getElementById('carViewport');
+    const paneMap = document.getElementById('paneMap');
+    const paneMedia = document.getElementById('paneMedia');
+    let isDraggingDivider = false;
+
+    divider.addEventListener('mousedown', (e) => {
+      isDraggingDivider = true;
+      document.body.style.cursor = 'col-resize';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDraggingDivider) return;
+      const rect = viewport.getBoundingClientRect();
+      const posX = e.clientX - rect.left;
+      let pct = (posX / rect.width) * 100;
+      pct = Math.max(20, Math.min(85, pct)); // Giới hạn 20% đến 85%
+
+      paneMap.style.width = pct + '%';
+      paneMedia.style.width = (100 - pct) + '%';
+
+      const mapInt = Math.round(pct);
+      const mediaInt = 100 - mapInt;
+      document.getElementById('lblMapPct').textContent = mapInt + '%';
+      document.getElementById('lblMediaPct').textContent = mediaInt + '%';
+      document.getElementById('statSplit').textContent = `${mapInt}% : ${mediaInt}%`;
+      log(`Đã kéo tỉ lệ màn hình: ${mapInt}% Bản đồ - ${mediaInt}% Giải trí`);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isDraggingDivider) {
+        isDraggingDivider = false;
+        document.body.style.cursor = 'default';
+      }
+    });
+
+    // ==================== KÉO THẢ CÁC WIDGET TỰ DO ====================
+    function makeDraggable(elementId, statId) {
+      const el = document.getElementById(elementId);
+      let isDragging = false;
+      let startX, startY, origLeft, origTop;
+
+      el.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = el.getBoundingClientRect();
+        const parentRect = viewport.getBoundingClientRect();
+        origLeft = rect.left - parentRect.left;
+        origTop = rect.top - parentRect.top;
+        el.style.zIndex = 50;
+        e.preventDefault();
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const parentRect = viewport.getBoundingClientRect();
+        let newLeft = origLeft + (e.clientX - startX);
+        let newTop = origTop + (e.clientY - startY);
+
+        // Giữ widget trong màn hình xe
+        newLeft = Math.max(0, Math.min(parentRect.width - el.offsetWidth, newLeft));
+        newTop = Math.max(0, Math.min(parentRect.height - el.offsetHeight, newTop));
+
+        el.style.left = newLeft + 'px';
+        el.style.top = newTop + 'px';
+        el.style.bottom = 'auto';
+        el.style.right = 'auto';
+
+        document.getElementById(statId).textContent = `X: ${Math.round(newLeft)}px, Y: ${Math.round(newTop)}px`;
+        log(`Đang kéo ${elementId}: (${Math.round(newLeft)}px, ${Math.round(newTop)}px)`);
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          el.style.zIndex = 40;
+          log(`Đã thả và cố định vị trí ${elementId}`);
+        }
+      });
+    }
+
+    makeDraggable('widgetSpeed', 'statSpeedPos');
+    makeDraggable('widgetQr', 'statQrPos');
+    makeDraggable('widgetCar', 'statSpeedPos');
+
+    // Chỉnh kích cỡ QR
+    function resizeQrWidget(val) {
+      const qr = document.getElementById('widgetQr');
+      qr.style.width = val + 'px';
+      document.getElementById('statQrSize').textContent = val + ' px';
+      log(`Đã đổi cỡ Mã QR: ${val}px`);
+    }
+
+    // Bật/tắt QR Widget
+    let qrVisible = true;
+    function toggleQrVisibility() {
+      qrVisible = !qrVisible;
+      const el = document.getElementById('widgetQr');
+      el.style.display = qrVisible ? 'block' : 'none';
+      const btn = document.getElementById('btnToggleQrBar');
+      if (qrVisible) {
+        btn.className = "px-3.5 py-1.5 rounded-xl bg-[#C86A3E] text-white font-bold flex items-center gap-1.5 shadow-lg transition";
+        log("Đã bật hiển thị Mã QR thanh toán trên màn hình");
+      } else {
+        btn.className = "px-3.5 py-1.5 rounded-xl bg-[#20242e] text-gray-400 font-bold flex items-center gap-1.5 transition";
+        log("Đã ẩn Mã QR");
+      }
+    }
+
+    // Mặc định Grab/XanhSM
+    function resetToGrabDefault() {
+      paneMap.style.width = '67%';
+      paneMedia.style.width = '33%';
+      document.getElementById('lblMapPct').textContent = '67%';
+      document.getElementById('lblMediaPct').textContent = '33%';
+      document.getElementById('statSplit').textContent = '67% : 33%';
+
+      const speedW = document.getElementById('widgetSpeed');
+      speedW.style.left = '16px';
+      speedW.style.top = '16px';
+
+      const qrW = document.getElementById('widgetQr');
+      qrW.style.left = '24px';
+      qrW.style.top = '130px';
+      qrW.style.width = '140px';
+      document.getElementById('statQrSize').textContent = '140 px';
+
+      log("Đã đặt lại bố cục mặc định: 67% Bản đồ + 33% Giải trí!");
+    }
+
+    // Media Tabs
+    function setMediaTab(tab) {
+      const tabs = ['youtube', 'tiktok', 'vtvgo'];
+      const map = {
+        'youtube': { btn: 'mediaTabYt', view: 'viewYouTube', name: 'YouTube' },
+        'tiktok': { btn: 'mediaTabTk', view: 'viewTikTok', name: 'TikTok' },
+        'vtvgo': { btn: 'mediaTabVtv', view: 'viewVTVGo', name: 'VTV Go' }
+      };
+
+      tabs.forEach(t => {
+        const item = map[t];
+        const btn = document.getElementById(item.btn);
+        const view = document.getElementById(item.view);
+        if (t === tab) {
+          btn.className = "flex-1 py-1 rounded-lg bg-[#C86A3E] text-white font-bold text-center text-[11px] shadow";
+          view.classList.remove('hidden');
+          view.classList.add('flex');
+        } else {
+          btn.className = "flex-1 py-1 rounded-lg text-gray-400 font-medium text-center text-[11px] hover:text-white";
+          view.classList.add('hidden');
+          view.classList.remove('flex');
+        }
+      });
+      log(`Đã chuyển tab sang: ${map[tab].name}`);
+    }
+
+    // Steering wheel simulate
+    const songs = [
+      "Tuyển Tập Nhạc Lái Xe Buổi Tối Cho Bác Tài 2026",
+      "EDM Vinahouse Bass Cực Căng - Chống Buồn Ngủ Khi Lái Đêm",
+      "Acoustic Nhẹ Nhàng Thư Giãn Buổi Sáng - VinFast VF5",
+      "Nonstop Remix Hot TikTok Triệu View 2026"
+    ];
+    let sIdx = 0;
+    let playing = true;
+
+    function simulateSteer(act) {
+      if (act === 'next') {
+        sIdx = (sIdx + 1) % songs.length;
+        document.getElementById('playingTitle').textContent = "🎵 " + songs[sIdx];
+        log(`[NÚT VÔ LĂNG] NEXT -> Đang phát bài: "${songs[sIdx]}"`);
+      } else if (act === 'prev') {
+        sIdx = (sIdx - 1 + songs.length) % songs.length;
+        document.getElementById('playingTitle').textContent = "🎵 " + songs[sIdx];
+        log(`[NÚT VÔ LĂNG] PREVIOUS -> Đang phát bài: "${songs[sIdx]}"`);
+      } else if (act === 'playpause') {
+        playing = !playing;
+        document.getElementById('steerPlayBtn').textContent = playing ? "⏯ Play/Pause" : "▶ Đang dừng";
+        log(playing ? "Tiếp tục phát nhạc" : "Đã tạm dừng phát nhạc");
+      }
+    }
+
+    function reloadWeb() {
+      log("Đã tải lại trang!");
+    }
+
+    function saveLayoutConfig() {
+      alert("✓ Bố cục kéo thả của bạn đã được lưu thành công!\nKhi kết nối xe VF5 Plus, màn hình sẽ mở đúng chuẩn vị trí bạn vừa đặt.");
+      log("✓ Bố cục đã được lưu vào hệ thống!");
+    }
+
+    function log(msg) {
+      document.getElementById('logDisplay').textContent = msg;
+    }
+  </script>
+</body>
+</html>
