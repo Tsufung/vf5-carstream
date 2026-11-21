@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var config: VF5Config
 
-    // Photo pickers
+    // Photo picker for QR payment
     private val pickQrLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             val success = config.saveQrImageFromUri(uri)
@@ -32,18 +32,6 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "Đã lưu mã QR thanh toán!", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Không thể lưu ảnh QR", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private val pickCarLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) {
-            val success = config.saveCarImageFromUri(uri)
-            if (success) {
-                updateCarPreview()
-                Toast.makeText(this, "Đã lưu ảnh xe!", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Không thể lưu ảnh xe", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -170,7 +158,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ─── 3. Images (QR & Car) ─────────────────────────────────────────────────
+    // ─── 3. Images (QR) ───────────────────────────────────────────────────────
 
     private fun setupImages() {
         updateQrPreview()
