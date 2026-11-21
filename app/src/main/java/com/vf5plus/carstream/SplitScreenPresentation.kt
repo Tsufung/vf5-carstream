@@ -46,10 +46,10 @@ class SplitScreenPresentation(
     }
 
     // Config values read from SharedPreferences
-    var splitRatio: Int = 70
-    var hudX: Int = 16
-    var hudY: Int = 16
-    var speedOffset: Int = 0
+    private var splitRatio: Int = 70
+    private var hudX: Int = 16
+    private var hudY: Int = 16
+    private var speedOffset: Int = 0
 
     // Views
     lateinit var mapWebView: WebView
